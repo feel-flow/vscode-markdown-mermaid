@@ -9,6 +9,7 @@ import * as path from 'node:path';
 import * as vscode from 'vscode';
 import { configCache } from './configCache';
 import { getDefaultConfig, loadMermaidConfigAsync } from './configLoader';
+import { renderCache } from './renderCache';
 import { runExportPipeline } from './exportPipeline';
 import { checkExportDependencies } from './toolChecker';
 import { getViewerHtml } from './viewerHtml';
@@ -210,6 +211,7 @@ export function activate(context: vscode.ExtensionContext): void {
 
   // Phase 3: キャッシュに OutputChannel を設定
   configCache.setOutputChannel(outputChannel);
+  renderCache.setOutputChannel(outputChannel);
 
   context.subscriptions.push(outputChannel);
 
@@ -225,6 +227,7 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.workspace.onDidChangeWorkspaceFolders(() => {
       outputChannel.appendLine('[Config] ワークスペースが変更されました。キャッシュをクリアします。');
       configCache.clear();
+      renderCache.clear();
     })
   );
 
@@ -236,6 +239,7 @@ export function activate(context: vscode.ExtensionContext): void {
           '[Config] VS Code 設定が変更されました。キャッシュをクリアします。'
         );
         configCache.clear();
+        renderCache.clear();
       }
     })
   );
