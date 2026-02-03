@@ -44,3 +44,8 @@ export const DEFAULT_PDF_FORMAT = 'svg' as const;
 
 /** エクスポートコマンド実行時のタイムアウト（ms）。Pandoc 実行を想定。範囲: 30000-300000 */
 export const EXPORT_COMMAND_TIMEOUT_MS = 120000; // 120秒
+
+// ==================== Phase 3: パフォーマンス最適化関連定数 ====================
+
+/** 設定キャッシュの最大エントリ数。ワークスペースは通常 1-3 個なので、余裕を持って 10 に設定。 */
+export const MAX_CONFIG_CACHE_ENTRIES = 10;

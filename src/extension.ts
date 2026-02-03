@@ -7,10 +7,13 @@
 import * as crypto from 'node:crypto';
 import * as path from 'node:path';
 import * as vscode from 'vscode';
-import { getDefaultConfig, loadMermaidConfig } from './configLoader';
+import { configCache } from './configCache';
+import { getDefaultConfig, getFileTimestamp, loadMermaidConfigAsync } from './configLoader';
+import { MERMAID_CONFIG_FILENAME } from './constants';
 import { runExportPipeline } from './exportPipeline';
 import { checkExportDependencies } from './toolChecker';
 import { getViewerHtml } from './viewerHtml';
+import type { MermaidConfig } from './types';
 
 /** Webview 用 CSP nonce のバイト数。 */
 const NONCE_BYTES = 16;
@@ -29,10 +32,36 @@ function getNonce(): string {
 const VIEWER_OPEN_ERROR_MESSAGE = 'Viewer の表示に失敗しました。';
 
 /**
+ * キャッシュを利用して Mermaid 設定を読み込む（Phase 3 追加）。
+ *
+ * キャッシュヒット時はキャッシュから返す。ミス時は非同期で読み込み、キャッシュに保存する。
+ *
+ * @param workspaceRoot ワークスペースのルートパス
+ * @returns Mermaid 設定
+ */
+async function loadConfigWithCache(workspaceRoot: string): Promise<MermaidConfig> {
+  // キャッシュチェック
+  const cachedConfig = configCache.get(workspaceRoot);
+  if (cachedConfig !== undefined) {
+    return cachedConfig;
+  }
+
+  // キャッシュミス: 非同期で読み込む
+  const config = await loadMermaidConfigAsync(workspaceRoot, outputChannel);
+  const configPath = path.join(workspaceRoot, MERMAID_CONFIG_FILENAME);
+  const timestamp = await getFileTimestamp(configPath);
+
+  // キャッシュに保存
+  configCache.set(workspaceRoot, config, timestamp);
+
+  return config;
+}
+
+/**
  * 「Viewer を開く」コマンドを実行する。
  * アクティブな .md の内容を Webview で Markdown + Mermaid として表示する。
  */
-function openViewer(): void {
+async function openViewer(): Promise<void> {
   const editor = vscode.window.activeTextEditor;
   if (!editor || editor.document.languageId !== 'markdown') {
     vscode.window.showWarningMessage(
@@ -43,13 +72,14 @@ function openViewer(): void {
   const doc = editor.document;
   const markdown = doc.getText();
 
-  // ワークスペースルートから Mermaid 設定を読み込む
+  // ワークスペースルートから Mermaid 設定を読み込む（Phase 3: キャッシング対応）
   const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
-  const mermaidConfig = workspaceFolder
-    ? loadMermaidConfig(workspaceFolder.uri.fsPath, outputChannel)
-    : getDefaultConfig();
+  let mermaidConfig: MermaidConfig;
 
-  if (!workspaceFolder) {
+  if (workspaceFolder) {
+    mermaidConfig = await loadConfigWithCache(workspaceFolder.uri.fsPath);
+  } else {
+    mermaidConfig = getDefaultConfig();
     outputChannel.appendLine(
       '[Config] ワークスペースが開かれていないため、デフォルト設定を使用します。'
     );
@@ -116,7 +146,8 @@ async function exportDocument(target: 'epub' | 'pdf'): Promise<void> {
     return;
   }
 
-  const mermaidConfig = loadMermaidConfig(workspaceFolder.uri.fsPath, outputChannel);
+  // Phase 3: キャッシング対応
+  const mermaidConfig = await loadConfigWithCache(workspaceFolder.uri.fsPath);
 
   try {
     await vscode.window.withProgress(
@@ -164,13 +195,44 @@ async function exportToPdf(): Promise<void> {
 /**
  * 拡張がアクティベートされたときに呼ばれる。
  * OutputChannel 初期化、Viewer コマンド登録、エクスポートコマンド登録。
- * 設定読み込みは openViewer() 内で Viewer を開くたびに実行される。
+ * Phase 3: 設定キャッシュの初期化とワークスペース監視を追加。
  */
 export function activate(context: vscode.ExtensionContext): void {
   outputChannel = vscode.window.createOutputChannel('Markdown Mermaid Viewer');
   outputChannel.appendLine('Markdown Mermaid Viewer が有効になりました。');
 
+  // Phase 3: キャッシュに OutputChannel を設定
+  configCache.setOutputChannel(outputChannel);
+
   context.subscriptions.push(outputChannel);
+
+  // Phase 3: キャッシュの破棄を subscriptions に追加
+  context.subscriptions.push({
+    dispose: () => {
+      configCache.dispose();
+    },
+  });
+
+  // Phase 3: ワークスペースフォルダーの変更を監視し、キャッシュをクリア
+  context.subscriptions.push(
+    vscode.workspace.onDidChangeWorkspaceFolders(() => {
+      outputChannel.appendLine('[Config] ワークスペースが変更されました。キャッシュをクリアします。');
+      configCache.clear();
+    })
+  );
+
+  // Phase 3: VS Code 設定の変更を監視し、キャッシュをクリア
+  context.subscriptions.push(
+    vscode.workspace.onDidChangeConfiguration((e) => {
+      if (e.affectsConfiguration('markdownMermaidViewer')) {
+        outputChannel.appendLine(
+          '[Config] VS Code 設定が変更されました。キャッシュをクリアします。'
+        );
+        configCache.clear();
+      }
+    })
+  );
+
   context.subscriptions.push(
     vscode.commands.registerCommand('markdownMermaidViewer.openViewer', openViewer)
   );

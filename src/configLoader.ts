@@ -6,6 +6,7 @@
  */
 
 import * as fs from 'node:fs';
+import * as fsPromises from 'node:fs/promises';
 import * as path from 'node:path';
 import * as vscode from 'vscode';
 import {
@@ -272,4 +273,99 @@ export function loadMermaidConfig(
     ...getDefaultConfig(),
     ...validated,
   };
+}
+
+/**
+ * ワークスペースルートから .mermaid-config.json を非同期で読み込む（Phase 3 追加）。
+ *
+ * キャッシングと組み合わせて使用することで、設定読み込みを高速化する。
+ * 実装は同期版 loadMermaidConfig() と同じロジックを使用。
+ *
+ * @param workspaceRoot ワークスペースのルートパス
+ * @param outputChannel ログ出力用の OutputChannel
+ * @returns 読み込んだ設定（デフォルト値とマージ済み）。
+ *          ファイル不在・読み込みエラー・パースエラー時はデフォルト設定を返す。
+ */
+export async function loadMermaidConfigAsync(
+  workspaceRoot: string,
+  outputChannel: vscode.OutputChannel
+): Promise<MermaidConfig> {
+  const configPath = path.join(workspaceRoot, MERMAID_CONFIG_FILENAME);
+
+  // ファイル存在チェック（非同期）
+  try {
+    await fsPromises.access(configPath, fs.constants.F_OK);
+  } catch {
+    // ファイル不在は正常ケース（デフォルト設定を使用）
+    return getDefaultConfig();
+  }
+
+  // ファイル読み込み（非同期）
+  let content: string;
+  try {
+    content = await fsPromises.readFile(configPath, 'utf-8');
+  } catch (err) {
+    const errorDetail = err instanceof Error ? err.message : String(err);
+    outputChannel.appendLine(
+      `[Config] ${MERMAID_CONFIG_FILENAME} の読み込みに失敗しました。デフォルト設定を使用します。`
+    );
+    outputChannel.appendLine(`  詳細: ${errorDetail}`);
+    vscode.window.showWarningMessage(
+      `${MERMAID_CONFIG_FILENAME} の読み込みに失敗しました。詳細は Output パネルを確認してください。`
+    );
+    return getDefaultConfig();
+  }
+
+  // JSON パース
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(content);
+  } catch (err) {
+    const errorDetail = err instanceof Error ? err.message : String(err);
+    outputChannel.appendLine(
+      `[Config] ${MERMAID_CONFIG_FILENAME} のパースに失敗しました。デフォルト設定を使用します。`
+    );
+    outputChannel.appendLine(`  詳細: ${errorDetail}`);
+    vscode.window.showWarningMessage(
+      `${MERMAID_CONFIG_FILENAME} の JSON 形式が不正です。詳細は Output パネルを確認してください。`
+    );
+    return getDefaultConfig();
+  }
+
+  // 型検証
+  if (typeof parsed !== 'object' || parsed === null) {
+    outputChannel.appendLine(
+      `[Config] ${MERMAID_CONFIG_FILENAME} はオブジェクトである必要があります。デフォルト設定を使用します。`
+    );
+    vscode.window.showWarningMessage(
+      `${MERMAID_CONFIG_FILENAME} の形式が不正です。オブジェクトである必要があります。`
+    );
+    return getDefaultConfig();
+  }
+
+  // 設定検証
+  const validated = validateConfig(parsed as Record<string, unknown>, outputChannel);
+  outputChannel.appendLine(`[Config] ${MERMAID_CONFIG_FILENAME} を読み込みました。`);
+
+  return {
+    ...getDefaultConfig(),
+    ...validated,
+  };
+}
+
+/**
+ * ファイルの最終更新時刻（mtime）を取得する（Phase 3 追加）。
+ *
+ * キャッシュの無効化判定に使用。
+ *
+ * @param filePath ファイルパス
+ * @returns 最終更新時刻（ms）。ファイルが存在しない場合は 0。
+ */
+export async function getFileTimestamp(filePath: string): Promise<number> {
+  try {
+    const stats = await fsPromises.stat(filePath);
+    return stats.mtimeMs;
+  } catch {
+    return 0;
+  }
 }
