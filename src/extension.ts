@@ -6,10 +6,14 @@
 
 import * as crypto from 'node:crypto';
 import * as vscode from 'vscode';
+import { loadMermaidConfig } from './configLoader';
 import { getViewerHtml } from './viewerHtml';
 
 /** Webview 用 CSP nonce のバイト数。 */
 const NONCE_BYTES = 16;
+
+/** 拡張全体で使用する OutputChannel。activate() で初期化される。 */
+let outputChannel!: vscode.OutputChannel;
 
 /**
  * Webview 用の nonce を生成する（CSP 用）。
@@ -35,6 +39,13 @@ function openViewer(): void {
   }
   const doc = editor.document;
   const markdown = doc.getText();
+
+  // ワークスペースルートから Mermaid 設定を読み込む（#6 で Viewer に注入予定）
+  const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+  if (workspaceFolder) {
+    loadMermaidConfig(workspaceFolder.uri.fsPath, outputChannel);
+  }
+
   const panel = vscode.window.createWebviewPanel(
     'markdownMermaidViewer',
     `${doc.fileName} - Viewer`,
@@ -45,7 +56,6 @@ function openViewer(): void {
   try {
     panel.webview.html = getViewerHtml(markdown, panel.webview.cspSource, nonce);
   } catch (err) {
-    const outputChannel = vscode.window.createOutputChannel('Markdown Mermaid Viewer');
     outputChannel.appendLine(`[Viewer] ${VIEWER_OPEN_ERROR_MESSAGE}`);
     if (err instanceof Error) {
       outputChannel.appendLine(err.message);
@@ -56,10 +66,10 @@ function openViewer(): void {
 
 /**
  * 拡張がアクティベートされたときに呼ばれる。
- * Phase 1: Viewer コマンド登録。.mermaid-config.json 読み込みは #5/#6 で実装する。
+ * Phase 1: Viewer コマンド登録と設定読み込み。
  */
 export function activate(context: vscode.ExtensionContext): void {
-  const outputChannel = vscode.window.createOutputChannel('Markdown Mermaid Viewer');
+  outputChannel = vscode.window.createOutputChannel('Markdown Mermaid Viewer');
   outputChannel.appendLine('Markdown Mermaid Viewer が有効になりました。');
 
   context.subscriptions.push(outputChannel);
