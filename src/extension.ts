@@ -5,8 +5,11 @@
  */
 
 import * as crypto from 'node:crypto';
+import * as path from 'node:path';
 import * as vscode from 'vscode';
 import { getDefaultConfig, loadMermaidConfig } from './configLoader';
+import { runExportPipeline } from './exportPipeline';
+import { checkExportDependencies } from './toolChecker';
 import { getViewerHtml } from './viewerHtml';
 
 /** Webview 用 CSP nonce のバイト数。 */
@@ -72,8 +75,95 @@ function openViewer(): void {
 }
 
 /**
+ * ドキュメントをエクスポートする共通関数
+ */
+async function exportDocument(target: 'epub' | 'pdf'): Promise<void> {
+  const formatLabel = target.toUpperCase();
+  const extension = target;
+
+  const editor = vscode.window.activeTextEditor;
+  if (!editor || editor.document.languageId !== 'markdown') {
+    vscode.window.showWarningMessage(
+      `Markdown ファイルを開いてから「${formatLabel} にエクスポート」を実行してください。`
+    );
+    return;
+  }
+
+  const depsAvailable = await checkExportDependencies(outputChannel);
+  if (!depsAvailable) {
+    outputChannel.appendLine(`[Export] ${formatLabel} エクスポートを中止しました: 依存ツールが不足しています`);
+    return;
+  }
+
+  const doc = editor.document;
+  const inputPath = doc.uri.fsPath;
+  const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+
+  if (!workspaceFolder) {
+    vscode.window.showErrorMessage('ワークスペースを開いてから実行してください。');
+    return;
+  }
+
+  const parsedPath = path.parse(inputPath);
+  const defaultOutputPath = path.join(parsedPath.dir, `${parsedPath.name}.${extension}`);
+
+  const outputUri = await vscode.window.showSaveDialog({
+    defaultUri: vscode.Uri.file(defaultOutputPath),
+    filters: { [formatLabel]: [extension] },
+  });
+
+  if (!outputUri) {
+    return;
+  }
+
+  const mermaidConfig = loadMermaidConfig(workspaceFolder.uri.fsPath, outputChannel);
+
+  try {
+    await vscode.window.withProgress(
+      {
+        location: vscode.ProgressLocation.Notification,
+        title: `${formatLabel} にエクスポート中...`,
+        cancellable: false,
+      },
+      async () => {
+        await runExportPipeline(
+          {
+            inputPath,
+            outputPath: outputUri.fsPath,
+            target,
+            mermaidConfig,
+            workingDirectory: workspaceFolder.uri.fsPath,
+          },
+          outputChannel
+        );
+      }
+    );
+    vscode.window.showInformationMessage(`${formatLabel} エクスポートが完了しました: ${outputUri.fsPath}`);
+  } catch (err) {
+    const errorDetail = err instanceof Error ? err.message : String(err);
+    outputChannel.appendLine(`[Export] ${formatLabel} エクスポートに失敗しました。`);
+    outputChannel.appendLine(`  詳細: ${errorDetail}`);
+    vscode.window.showErrorMessage(`${formatLabel} エクスポートに失敗しました。詳細は Output パネルを確認してください。`);
+  }
+}
+
+/**
+ * 「EPUB にエクスポート」コマンドを実行する
+ */
+async function exportToEpub(): Promise<void> {
+  return exportDocument('epub');
+}
+
+/**
+ * 「PDF にエクスポート」コマンドを実行する
+ */
+async function exportToPdf(): Promise<void> {
+  return exportDocument('pdf');
+}
+
+/**
  * 拡張がアクティベートされたときに呼ばれる。
- * Phase 1: OutputChannel 初期化と Viewer コマンド登録。
+ * OutputChannel 初期化、Viewer コマンド登録、エクスポートコマンド登録。
  * 設定読み込みは openViewer() 内で Viewer を開くたびに実行される。
  */
 export function activate(context: vscode.ExtensionContext): void {
@@ -83,6 +173,14 @@ export function activate(context: vscode.ExtensionContext): void {
   context.subscriptions.push(outputChannel);
   context.subscriptions.push(
     vscode.commands.registerCommand('markdownMermaidViewer.openViewer', openViewer)
+  );
+
+  // エクスポートコマンド
+  context.subscriptions.push(
+    vscode.commands.registerCommand('markdownMermaidViewer.exportToEpub', exportToEpub)
+  );
+  context.subscriptions.push(
+    vscode.commands.registerCommand('markdownMermaidViewer.exportToPdf', exportToPdf)
   );
 }
 

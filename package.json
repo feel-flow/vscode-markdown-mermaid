@@ -16,13 +16,25 @@
   "main": "./out/extension.js",
   "activationEvents": [
     "onStartupFinished",
-    "onCommand:markdownMermaidViewer.openViewer"
+    "onCommand:markdownMermaidViewer.openViewer",
+    "onCommand:markdownMermaidViewer.exportToEpub",
+    "onCommand:markdownMermaidViewer.exportToPdf"
   ],
   "contributes": {
     "commands": [
       {
         "command": "markdownMermaidViewer.openViewer",
         "title": "Viewer を開く"
+      },
+      {
+        "command": "markdownMermaidViewer.exportToEpub",
+        "title": "EPUB にエクスポート",
+        "icon": "$(book)"
+      },
+      {
+        "command": "markdownMermaidViewer.exportToPdf",
+        "title": "PDF にエクスポート",
+        "icon": "$(file-pdf)"
       }
     ],
     "menus": {
@@ -31,6 +43,16 @@
           "command": "markdownMermaidViewer.openViewer",
           "when": "editorLangId == markdown",
           "group": "navigation"
+        },
+        {
+          "command": "markdownMermaidViewer.exportToEpub",
+          "when": "editorLangId == markdown",
+          "group": "1_export"
+        },
+        {
+          "command": "markdownMermaidViewer.exportToPdf",
+          "when": "editorLangId == markdown",
+          "group": "1_export"
         }
       ]
     },

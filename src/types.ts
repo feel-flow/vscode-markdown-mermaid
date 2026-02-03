@@ -26,6 +26,26 @@ export interface MermaidThemeVariables {
 }
 
 /**
+ * エクスポート設定
+ */
+export interface ExportOptions {
+  /** 解像度（DPI）。最小 72、最大 600、デフォルト 300 */
+  readonly dpi?: number;
+  /** 図の最大幅（px）。最小 400、最大 2000、デフォルト 800 */
+  readonly width?: number;
+  /** EPUB エクスポート時の設定 */
+  readonly epub?: {
+    /** 画像形式。デフォルト png */
+    readonly format?: 'png' | 'svg';
+  };
+  /** PDF エクスポート時の設定 */
+  readonly pdf?: {
+    /** 画像形式。デフォルト svg */
+    readonly format?: 'png' | 'svg';
+  };
+}
+
+/**
  * .mermaid-config.json の設定オブジェクト。
  * Mermaid.initialize() に渡す設定と対応。
  */
@@ -36,4 +56,6 @@ export interface MermaidConfig {
   startOnLoad?: boolean;
   securityLevel?: 'strict' | 'loose' | 'antiscript' | 'sandbox';
   logLevel?: 'fatal' | 'error' | 'warn' | 'info' | 'debug' | 'trace' | 0 | 1 | 2 | 3 | 4 | 5;
+  /** エクスポート設定 */
+  export?: ExportOptions;
 }
