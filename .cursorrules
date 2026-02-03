@@ -1,0 +1,34 @@
+# Cursor Rules for Markdown Mermaid Viewer
+
+## MANDATORY: Read MASTER.md First
+Before generating any code, you MUST read and understand `docs/MASTER.md`.
+
+## Project Context
+This is the **Markdown Mermaid Viewer** VS Code extension project. It provides a refined Mermaid preview in Markdown and strong support for Kindle/EPUB/PDF export. Development follows AI Spec Driven Development (docs structure from ai-spec-driven-development).
+
+## Key Constraints from MASTER.md
+- **TypeScript**: strict mode, no `any` (use `unknown` or proper types)
+- **No magic numbers**: use named constants or config; document units and ranges
+- **No console.log in production**: use VS Code OutputChannel
+- **Error handling**: do not swallow errors; surface to user or log
+- **Functions**: single responsibility, ~30 lines target
+- **Naming**: camelCase (variables), UPPER_SNAKE_CASE (constants), PascalCase (types/interfaces)
+
+## Document References
+- `docs/MASTER.md` — project overview and code generation rules
+- `docs/01-context/PROJECT.md` — vision and requirements
+- `docs/02-design/ARCHITECTURE.md` — technical design
+- `docs/03-implementation/PATTERNS.md` — implementation patterns
+- `docs/03-implementation/CONVENTIONS.md` — coding conventions
+- `docs/06-reference/GLOSSARY.md` — glossary
+- `docs/07-project-management/ROADMAP.md` — roadmap
+
+## Before Generating Code
+1. Read `docs/MASTER.md` for project context
+2. Check `docs/03-implementation/PATTERNS.md` for implementation patterns
+3. Verify `docs/02-design/ARCHITECTURE.md` for technical decisions
+
+## Implementation Priority
+1. **Phase 1**: Mermaid preview with .mermaid-config.json
+2. **Phase 2**: Export to EPUB/PDF (mermaid-filter + Pandoc)
+3. **Phase 3**: Optimization and optional KDP helpers
