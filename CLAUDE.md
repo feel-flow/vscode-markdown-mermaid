@@ -43,10 +43,10 @@ npm run watch
 # 本番用パッケージビルド（minify有効）
 npm run package
 
-# リント
+# リント（未実装）
 npm run lint
 
-# テスト
+# テスト（未実装）
 npm run test
 
 # 拡張パッケージ作成（.vsix生成）
@@ -81,7 +81,7 @@ npx vsce package
 
 ### 禁止事項
 - ❌ `any` 型（`unknown` を使用）
-- ❌ `console.log`（VS Code OutputChannel を使用）
+- ❌ `console.log`（VS Code OutputChannel を使用。ビルドスクリプトは例外）
 - ❌ マジックナンバー（定数化し、単位・範囲をコメントで明示）
 - ❌ エラーの握りつぶし
 
