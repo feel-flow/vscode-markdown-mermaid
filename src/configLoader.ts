@@ -52,10 +52,16 @@ function validateConfig(
     }
   }
 
-  // themeVariables の検証（オブジェクトであること）
+  // themeVariables の検証（オブジェクトであること + base テーマ時のみ有効）
   if (config.themeVariables !== undefined) {
     if (typeof config.themeVariables === 'object' && config.themeVariables !== null) {
       validated.themeVariables = config.themeVariables as MermaidConfig['themeVariables'];
+      // base テーマ以外で themeVariables が指定されている場合は警告
+      if (config.theme !== 'base') {
+        outputChannel.appendLine(
+          '[Config] 注意: themeVariables は theme: "base" のときのみ有効です。現在のテーマでは無視されます。'
+        );
+      }
     } else {
       outputChannel.appendLine('[Config] 警告: themeVariables はオブジェクトである必要があります。');
     }
