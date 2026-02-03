@@ -1,6 +1,6 @@
 /**
  * エクスポートパイプライン
- * Phase 2: Pandoc + mermaid-filter による EPUB/PDF エクスポート実行。
+ * Pandoc + mermaid-filter による EPUB/PDF エクスポート実行。
  *
  * docs/02-design/ARCHITECTURE.md の Infrastructure 層に対応。
  */
@@ -70,20 +70,63 @@ async function runPandoc(
     outputChannel.appendLine(`[Export] エクスポート成功: ${outputPath}`);
   } catch (err) {
     const errorDetail = err instanceof Error ? err.message : String(err);
+    const errorCode = (err as { code?: string }).code;
     const stderr = (err as { stderr?: string }).stderr;
 
+    // ログに詳細を出力
     outputChannel.appendLine(`[Export] Pandoc 実行に失敗しました。`);
+    outputChannel.appendLine(`  エラーコード: ${errorCode || 'unknown'}`);
     outputChannel.appendLine(`  詳細: ${errorDetail}`);
     if (stderr) {
       outputChannel.appendLine(`  stderr: ${stderr}`);
     }
 
-    throw new Error(`Pandoc 実行に失敗しました: ${errorDetail}`);
+    // エラーコード別に具体的なメッセージを生成
+    if (errorCode === 'ETIMEDOUT') {
+      throw new Error(
+        `Pandoc 実行がタイムアウトしました（${EXPORT_COMMAND_TIMEOUT_MS / 1000}秒）。\n` +
+        `大きなファイルや複雑な図が含まれている可能性があります。\n` +
+        `詳細: ${errorDetail}`
+      );
+    }
+
+    if (errorCode === 'ENOENT') {
+      throw new Error(
+        `Pandoc または mermaid-filter が見つかりません。\n` +
+        `ツールチェックは成功しましたが、実行時に見つかりませんでした。\n` +
+        `詳細: ${errorDetail}`
+      );
+    }
+
+    if (errorCode === 'EACCES') {
+      throw new Error(
+        `ファイルのアクセス権限エラーが発生しました。\n` +
+        `出力先ディレクトリへの書き込み権限を確認してください。\n` +
+        `詳細: ${errorDetail}`
+      );
+    }
+
+    // stderr から mermaid-filter 特有のエラーを検出
+    if (stderr && stderr.includes('mermaid-filter')) {
+      throw new Error(
+        `mermaid-filter の実行中にエラーが発生しました。\n` +
+        `Mermaid 図の構文エラーの可能性があります。\n` +
+        `stderr: ${stderr}`
+      );
+    }
+
+    // 汎用的な Pandoc エラー
+    throw new Error(
+      `Pandoc 実行に失敗しました。\n` +
+      `stderr: ${stderr || 'なし'}\n` +
+      `詳細: ${errorDetail}`
+    );
   }
 }
 
 /**
- * .mermaid-config.json を作業ディレクトリに書き出す
+ * Mermaid CLI 用の設定ファイル（.mermaid-config.json）を作業ディレクトリに書き出す。
+ * theme, themeVariables（base テーマ時のみ）、themeCSS のみを含む。
  */
 async function writeMermaidConfig(
   workingDirectory: string,
@@ -107,8 +150,24 @@ async function writeMermaidConfig(
     outputChannel.appendLine(`[Export] .mermaid-config.json を作業ディレクトリに書き出しました: ${configPath}`);
   } catch (err) {
     const errorDetail = err instanceof Error ? err.message : String(err);
-    outputChannel.appendLine(`[Export] 警告: .mermaid-config.json の書き出しに失敗しました。`);
+    const errorCode = (err as { code?: string }).code;
+
+    outputChannel.appendLine(`[Export] エラー: .mermaid-config.json の書き出しに失敗しました。`);
+    outputChannel.appendLine(`  エラーコード: ${errorCode || 'unknown'}`);
     outputChannel.appendLine(`  詳細: ${errorDetail}`);
+
+    // エラーを上位に伝播させる
+    let errorMessage = `Mermaid 設定ファイルの書き出しに失敗しました。\nパス: ${configPath}`;
+
+    if (errorCode === 'EACCES') {
+      errorMessage += '\nディレクトリへの書き込み権限を確認してください。';
+    } else if (errorCode === 'ENOSPC') {
+      errorMessage += '\nディスクの空き容量を確認してください。';
+    }
+
+    errorMessage += `\n詳細: ${errorDetail}`;
+
+    throw new Error(errorMessage);
   }
 }
 

@@ -1,6 +1,6 @@
 /**
  * エクスポート形式解決モジュール
- * Phase 2: ターゲット（EPUB/PDF）に応じた画像形式・解像度・幅を決定する。
+ * ターゲット（EPUB/PDF）に応じた画像形式・解像度・幅を決定する。
  *
  * docs/03-implementation/PATTERNS.md および CONVENTIONS.md を参照。
  */
@@ -16,7 +16,8 @@ export type ExportTarget = 'epub' | 'pdf';
 export type ImageFormat = 'png' | 'svg';
 
 /**
- * エクスポートターゲットに応じた画像形式を解決する
+ * エクスポートターゲット（EPUB/PDF）に応じた画像形式を取得する。
+ * 設定が未指定の場合、EPUB は PNG（Kindle 互換性）、PDF は SVG（高品質）を返す。
  */
 export function resolveImageFormat(
   target: ExportTarget,
@@ -34,14 +35,16 @@ export function resolveImageFormat(
 }
 
 /**
- * 解像度（DPI）を解決する
+ * エクスポート用の解像度（DPI）を取得する。
+ * 設定が未指定の場合はデフォルト値（300 DPI）を返す。
  */
 export function resolveDpi(exportOptions?: ExportOptions): number {
   return exportOptions?.dpi ?? DEFAULT_EXPORT_DPI;
 }
 
 /**
- * 図の幅（px）を解決する
+ * エクスポート用の図の最大幅（px）を取得する。
+ * 設定が未指定の場合はデフォルト値（800px）を返す。
  */
 export function resolveWidth(exportOptions?: ExportOptions): number {
   return exportOptions?.width ?? DEFAULT_EXPORT_WIDTH;

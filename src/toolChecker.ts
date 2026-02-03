@@ -1,6 +1,6 @@
 /**
  * 外部ツールの存在チェックモジュール
- * Phase 2: エクスポート機能の依存ツール（mermaid-filter, Pandoc）検出。
+ * エクスポート機能の依存ツール（mermaid-filter, Pandoc）検出。
  *
  * docs/03-implementation/PATTERNS.md および CONVENTIONS.md を参照。
  */
@@ -34,11 +34,25 @@ export async function checkMermaidFilter(
     return { available: true, version };
   } catch (err) {
     const errorDetail = err instanceof Error ? err.message : String(err);
-    outputChannel.appendLine(`[ToolCheck] mermaid-filter が見つかりません。`);
+    const errorCode = (err as { code?: string }).code;
+
+    // ENOENT (コマンドが見つからない) と他のエラーを区別
+    if (errorCode === 'ENOENT') {
+      outputChannel.appendLine(`[ToolCheck] mermaid-filter が見つかりません。`);
+      outputChannel.appendLine(`  詳細: ${errorDetail}`);
+      return {
+        available: false,
+        errorMessage: 'mermaid-filter が見つかりません。\nインストール方法: npm install -g mermaid-filter'
+      };
+    }
+
+    // その他のエラー（タイムアウト、権限エラー等）
+    outputChannel.appendLine(`[ToolCheck] エラー: mermaid-filter の実行中に予期しないエラーが発生しました。`);
+    outputChannel.appendLine(`  エラーコード: ${errorCode || 'unknown'}`);
     outputChannel.appendLine(`  詳細: ${errorDetail}`);
     return {
       available: false,
-      errorMessage: 'mermaid-filter が見つかりません。\nインストール方法: npm install -g mermaid-filter'
+      errorMessage: `mermaid-filter の実行中にエラーが発生しました: ${errorDetail}`
     };
   }
 }
@@ -58,11 +72,25 @@ export async function checkPandoc(
     return { available: true, version };
   } catch (err) {
     const errorDetail = err instanceof Error ? err.message : String(err);
-    outputChannel.appendLine(`[ToolCheck] Pandoc が見つかりません。`);
+    const errorCode = (err as { code?: string }).code;
+
+    // ENOENT (コマンドが見つからない) と他のエラーを区別
+    if (errorCode === 'ENOENT') {
+      outputChannel.appendLine(`[ToolCheck] Pandoc が見つかりません。`);
+      outputChannel.appendLine(`  詳細: ${errorDetail}`);
+      return {
+        available: false,
+        errorMessage: 'Pandoc が見つかりません。\nインストール方法: https://pandoc.org/installing.html'
+      };
+    }
+
+    // その他のエラー（タイムアウト、権限エラー等）
+    outputChannel.appendLine(`[ToolCheck] エラー: Pandoc の実行中に予期しないエラーが発生しました。`);
+    outputChannel.appendLine(`  エラーコード: ${errorCode || 'unknown'}`);
     outputChannel.appendLine(`  詳細: ${errorDetail}`);
     return {
       available: false,
-      errorMessage: 'Pandoc が見つかりません。\nインストール方法: https://pandoc.org/installing.html'
+      errorMessage: `Pandoc の実行中にエラーが発生しました: ${errorDetail}`
     };
   }
 }
@@ -84,11 +112,21 @@ export async function checkExportDependencies(
   const missingTools: string[] = [];
 
   if (!mermaidFilterResult.available) {
-    missingTools.push(mermaidFilterResult.errorMessage!);
+    if (!mermaidFilterResult.errorMessage) {
+      outputChannel.appendLine('[ToolCheck] エラー: mermaid-filter チェックが失敗しましたが、エラーメッセージがありません');
+      missingTools.push('mermaid-filter のチェックに失敗しました（理由不明）');
+    } else {
+      missingTools.push(mermaidFilterResult.errorMessage);
+    }
   }
 
   if (!pandocResult.available) {
-    missingTools.push(pandocResult.errorMessage!);
+    if (!pandocResult.errorMessage) {
+      outputChannel.appendLine('[ToolCheck] エラー: Pandoc チェックが失敗しましたが、エラーメッセージがありません');
+      missingTools.push('Pandoc のチェックに失敗しました（理由不明）');
+    } else {
+      missingTools.push(pandocResult.errorMessage);
+    }
   }
 
   if (missingTools.length > 0) {

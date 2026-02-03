@@ -44,7 +44,7 @@ export function getDefaultConfig(): MermaidConfig {
 }
 
 /**
- * デフォルトの ExportOptions を返す（Phase 2）
+ * エクスポート設定のデフォルト値を返す。
  */
 export function getDefaultExportOptions(): ExportOptions {
   return {
@@ -56,7 +56,8 @@ export function getDefaultExportOptions(): ExportOptions {
 }
 
 /**
- * export フィールドを検証し、範囲外の値を補正する（Phase 2）
+ * export フィールドの値を検証し、有効なフィールドのみを返す。
+ * 無効な値（範囲外・型不一致）は警告を出力し、デフォルト値にフォールバックする。
  */
 function validateExportOptions(
   exportOpts: unknown,
@@ -67,7 +68,8 @@ function validateExportOptions(
   }
 
   const opts = exportOpts as Record<string, unknown>;
-  const validated: Partial<ExportOptions> = {};
+  // readonly プロパティを持つ ExportOptions を構築するため、一時的なオブジェクトとして扱う
+  const validated: Record<string, unknown> = {};
 
   // DPI の検証
   if (opts.dpi !== undefined) {
@@ -119,7 +121,7 @@ function validateExportOptions(
     }
   }
 
-  return validated;
+  return validated as Partial<ExportOptions>;
 }
 
 /**
@@ -182,7 +184,7 @@ function validateConfig(
     }
   }
 
-  // export フィールドの検証（Phase 2）
+  // export フィールドの検証
   if (config.export !== undefined) {
     const exportOpts = validateExportOptions(config.export, outputChannel);
     if (Object.keys(exportOpts).length > 0) {

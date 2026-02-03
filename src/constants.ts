@@ -37,10 +37,10 @@ export const MIN_EXPORT_WIDTH = 400;
 export const MAX_EXPORT_WIDTH = 2000;
 
 /** EPUB エクスポート時のデフォルト画像形式。Kindle 互換性を優先。 */
-export const DEFAULT_EPUB_FORMAT = 'png';
+export const DEFAULT_EPUB_FORMAT = 'png' as const;
 
 /** PDF エクスポート時のデフォルト画像形式。ベクター形式で高品質。 */
-export const DEFAULT_PDF_FORMAT = 'svg';
+export const DEFAULT_PDF_FORMAT = 'svg' as const;
 
 /** エクスポートコマンド実行時のタイムアウト（ms）。Pandoc 実行を想定。範囲: 30000-300000 */
 export const EXPORT_COMMAND_TIMEOUT_MS = 120000; // 120秒
