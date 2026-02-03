@@ -14,6 +14,14 @@ import type { MermaidConfig } from './types';
 /** 有効な Mermaid テーマ名 */
 const VALID_THEMES = ['default', 'neutral', 'dark', 'forest', 'base'] as const;
 
+/** themeCSS で禁止するパターン（セキュリティ対策） */
+const DANGEROUS_CSS_PATTERNS = [
+  /url\s*\(/i,        // url() - 外部リソース読み込み防止
+  /expression\s*\(/i, // expression() - IE の CSS 式
+  /javascript:/i,     // javascript: スキーム
+  /@import/i,         // @import - 外部 CSS 読み込み防止
+] as const;
+
 /**
  * デフォルトの Mermaid 設定を返す。
  */
@@ -53,10 +61,21 @@ function validateConfig(
     }
   }
 
-  // themeCSS の検証
+  // themeCSS の検証（セキュリティチェック付き）
   if (config.themeCSS !== undefined) {
     if (typeof config.themeCSS === 'string') {
-      validated.themeCSS = config.themeCSS;
+      const hasDangerousPattern = DANGEROUS_CSS_PATTERNS.some((pattern) =>
+        pattern.test(config.themeCSS as string)
+      );
+      if (hasDangerousPattern) {
+        outputChannel.appendLine(
+          '[Config] 警告: themeCSS に禁止パターン（url, expression, javascript, @import）が含まれています。この値は無視されます。'
+        );
+      } else {
+        validated.themeCSS = config.themeCSS;
+      }
+    } else {
+      outputChannel.appendLine('[Config] 警告: themeCSS は文字列である必要があります。');
     }
   }
 
