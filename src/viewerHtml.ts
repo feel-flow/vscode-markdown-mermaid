@@ -4,11 +4,8 @@
  */
 
 import MarkdownIt from 'markdown-it';
-import {
-  DEFAULT_MERMAID_THEME,
-  MERMAID_CDN_URL,
-  VIEWER_RENDER_ERROR_MESSAGE,
-} from './constants';
+import { MERMAID_CDN_URL, VIEWER_RENDER_ERROR_MESSAGE } from './constants';
+import type { MermaidConfig } from './types';
 
 /** 生 HTML を無効化して XSS を防ぐ（docs/MASTER.md セキュリティ要件）。 */
 const md = new MarkdownIt({ html: false });
@@ -60,17 +57,39 @@ function splitMarkdownAndMermaid(markdown: string): Array<{ kind: 'markdown' | '
 }
 
 /**
+ * MermaidConfig を JSON 文字列に変換する。
+ * 循環参照や BigInt などで失敗した場合はエラーをスローする。
+ */
+function stringifyMermaidConfig(config: MermaidConfig): string {
+  const configWithDefaults = { ...config, startOnLoad: false };
+  try {
+    return JSON.stringify(configWithDefaults);
+  } catch (err) {
+    const detail = err instanceof Error ? err.message : String(err);
+    throw new Error(
+      `Mermaid 設定の JSON 変換に失敗しました。.mermaid-config.json を確認してください。詳細: ${detail}`
+    );
+  }
+}
+
+/**
  * Viewer 用の HTML 文字列を生成する。
  * Markdown は markdown-it で HTML に変換し、Mermaid ブロックは div.mermaid で Mermaid.js に描画させる。
  * @param markdown - 表示する Markdown 本文
  * @param cspSource - Webview の cspSource（CSP に含める）
  * @param nonce - インライン script 用 nonce
+ * @param mermaidConfig - Mermaid 設定（.mermaid-config.json から読み込んだもの）
+ * @throws {Error} MermaidConfig の JSON 変換に失敗した場合
  */
 export function getViewerHtml(
   markdown: string,
   cspSource: string,
-  nonce: string
+  nonce: string,
+  mermaidConfig: MermaidConfig
 ): string {
+  // 設定を JSON 文字列に変換（失敗時はここでエラーがスローされる）
+  const mermaidConfigJson = stringifyMermaidConfig(mermaidConfig);
+
   const segments = splitMarkdownAndMermaid(markdown);
   const bodyParts: string[] = [];
 
@@ -113,7 +132,19 @@ export function getViewerHtml(
         }
         return;
       }
-      mermaid.initialize({ startOnLoad: false, theme: '${DEFAULT_MERMAID_THEME}' });
+      try {
+        mermaid.initialize(${mermaidConfigJson});
+      } catch (initErr) {
+        var el = document.querySelector('.viewer-content');
+        if (el) {
+          var p = document.createElement('p');
+          p.className = 'mermaid-error';
+          p.textContent = 'Mermaid 設定の初期化に失敗しました。.mermaid-config.json を確認してください。';
+          el.appendChild(p);
+        }
+        console.error('Mermaid initialize error:', initErr);
+        return;
+      }
       var containers = document.querySelectorAll('.mermaid');
       if (containers.length === 0) return;
       mermaid.run({ nodes: Array.from(containers) }).catch(function(err) {
@@ -123,6 +154,7 @@ export function getViewerHtml(
         msg.className = 'mermaid-error';
         msg.textContent = '${escapeHtml(VIEWER_RENDER_ERROR_MESSAGE)}';
         root.appendChild(msg);
+        console.error('Mermaid run error:', err);
       });
     })();
   </script>
