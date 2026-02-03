@@ -41,7 +41,6 @@ function openViewer(): void {
   const markdown = doc.getText();
 
   // ワークスペースルートから Mermaid 設定を読み込む
-  // TODO(#6): mermaidConfig を getViewerHtml に渡して Viewer に注入する
   const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
   const mermaidConfig = workspaceFolder
     ? loadMermaidConfig(workspaceFolder.uri.fsPath, outputChannel)
@@ -63,7 +62,7 @@ function openViewer(): void {
   );
   const nonce = getNonce();
   try {
-    panel.webview.html = getViewerHtml(markdown, panel.webview.cspSource, nonce);
+    panel.webview.html = getViewerHtml(markdown, panel.webview.cspSource, nonce, mermaidConfig);
   } catch (err) {
     const errorDetail = err instanceof Error ? err.message : String(err);
     outputChannel.appendLine(`[Viewer] ${VIEWER_OPEN_ERROR_MESSAGE}`);

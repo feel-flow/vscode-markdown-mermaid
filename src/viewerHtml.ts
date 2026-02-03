@@ -4,11 +4,8 @@
  */
 
 import MarkdownIt from 'markdown-it';
-import {
-  DEFAULT_MERMAID_THEME,
-  MERMAID_CDN_URL,
-  VIEWER_RENDER_ERROR_MESSAGE,
-} from './constants';
+import { MERMAID_CDN_URL, VIEWER_RENDER_ERROR_MESSAGE } from './constants';
+import type { MermaidConfig } from './types';
 
 /** 生 HTML を無効化して XSS を防ぐ（docs/MASTER.md セキュリティ要件）。 */
 const md = new MarkdownIt({ html: false });
@@ -65,11 +62,13 @@ function splitMarkdownAndMermaid(markdown: string): Array<{ kind: 'markdown' | '
  * @param markdown - 表示する Markdown 本文
  * @param cspSource - Webview の cspSource（CSP に含める）
  * @param nonce - インライン script 用 nonce
+ * @param mermaidConfig - Mermaid 設定（.mermaid-config.json から読み込んだもの）
  */
 export function getViewerHtml(
   markdown: string,
   cspSource: string,
-  nonce: string
+  nonce: string,
+  mermaidConfig: MermaidConfig
 ): string {
   const segments = splitMarkdownAndMermaid(markdown);
   const bodyParts: string[] = [];
@@ -113,7 +112,7 @@ export function getViewerHtml(
         }
         return;
       }
-      mermaid.initialize({ startOnLoad: false, theme: '${DEFAULT_MERMAID_THEME}' });
+      mermaid.initialize(${JSON.stringify({ ...mermaidConfig, startOnLoad: false })});
       var containers = document.querySelectorAll('.mermaid');
       if (containers.length === 0) return;
       mermaid.run({ nodes: Array.from(containers) }).catch(function(err) {
