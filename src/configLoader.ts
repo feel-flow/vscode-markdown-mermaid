@@ -8,8 +8,19 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as vscode from 'vscode';
-import { DEFAULT_MERMAID_THEME, MERMAID_CONFIG_FILENAME } from './constants';
-import type { MermaidConfig } from './types';
+import {
+  DEFAULT_EPUB_FORMAT,
+  DEFAULT_EXPORT_DPI,
+  DEFAULT_EXPORT_WIDTH,
+  DEFAULT_MERMAID_THEME,
+  DEFAULT_PDF_FORMAT,
+  MAX_EXPORT_DPI,
+  MAX_EXPORT_WIDTH,
+  MERMAID_CONFIG_FILENAME,
+  MIN_EXPORT_DPI,
+  MIN_EXPORT_WIDTH,
+} from './constants';
+import type { ExportOptions, MermaidConfig } from './types';
 
 /** 有効な Mermaid テーマ名 */
 const VALID_THEMES = ['default', 'neutral', 'dark', 'forest', 'base'] as const;
@@ -30,6 +41,85 @@ export function getDefaultConfig(): MermaidConfig {
     theme: DEFAULT_MERMAID_THEME,
     startOnLoad: false,
   };
+}
+
+/**
+ * デフォルトの ExportOptions を返す（Phase 2）
+ */
+export function getDefaultExportOptions(): ExportOptions {
+  return {
+    dpi: DEFAULT_EXPORT_DPI,
+    width: DEFAULT_EXPORT_WIDTH,
+    epub: { format: DEFAULT_EPUB_FORMAT },
+    pdf: { format: DEFAULT_PDF_FORMAT },
+  };
+}
+
+/**
+ * export フィールドを検証し、範囲外の値を補正する（Phase 2）
+ */
+function validateExportOptions(
+  exportOpts: unknown,
+  outputChannel: vscode.OutputChannel
+): Partial<ExportOptions> {
+  if (typeof exportOpts !== 'object' || exportOpts === null) {
+    return {};
+  }
+
+  const opts = exportOpts as Record<string, unknown>;
+  const validated: Partial<ExportOptions> = {};
+
+  // DPI の検証
+  if (opts.dpi !== undefined) {
+    if (typeof opts.dpi === 'number' && opts.dpi >= MIN_EXPORT_DPI && opts.dpi <= MAX_EXPORT_DPI) {
+      validated.dpi = opts.dpi;
+    } else {
+      outputChannel.appendLine(
+        `[Config] 警告: export.dpi の値 "${String(opts.dpi)}" は無効です。有効範囲: ${MIN_EXPORT_DPI}-${MAX_EXPORT_DPI}`
+      );
+    }
+  }
+
+  // width の検証
+  if (opts.width !== undefined) {
+    if (typeof opts.width === 'number' && opts.width >= MIN_EXPORT_WIDTH && opts.width <= MAX_EXPORT_WIDTH) {
+      validated.width = opts.width;
+    } else {
+      outputChannel.appendLine(
+        `[Config] 警告: export.width の値 "${String(opts.width)}" は無効です。有効範囲: ${MIN_EXPORT_WIDTH}-${MAX_EXPORT_WIDTH}`
+      );
+    }
+  }
+
+  // epub.format の検証
+  if (opts.epub !== undefined && typeof opts.epub === 'object' && opts.epub !== null) {
+    const epub = opts.epub as Record<string, unknown>;
+    if (epub.format !== undefined) {
+      if (epub.format === 'png' || epub.format === 'svg') {
+        validated.epub = { format: epub.format };
+      } else {
+        outputChannel.appendLine(
+          `[Config] 警告: export.epub.format の値 "${String(epub.format)}" は無効です。有効な値: png, svg`
+        );
+      }
+    }
+  }
+
+  // pdf.format の検証
+  if (opts.pdf !== undefined && typeof opts.pdf === 'object' && opts.pdf !== null) {
+    const pdf = opts.pdf as Record<string, unknown>;
+    if (pdf.format !== undefined) {
+      if (pdf.format === 'png' || pdf.format === 'svg') {
+        validated.pdf = { format: pdf.format };
+      } else {
+        outputChannel.appendLine(
+          `[Config] 警告: export.pdf.format の値 "${String(pdf.format)}" は無効です。有効な値: png, svg`
+        );
+      }
+    }
+  }
+
+  return validated;
 }
 
 /**
@@ -89,6 +179,14 @@ function validateConfig(
   if (config.startOnLoad !== undefined) {
     if (typeof config.startOnLoad === 'boolean') {
       validated.startOnLoad = config.startOnLoad;
+    }
+  }
+
+  // export フィールドの検証（Phase 2）
+  if (config.export !== undefined) {
+    const exportOpts = validateExportOptions(config.export, outputChannel);
+    if (Object.keys(exportOpts).length > 0) {
+      validated.export = exportOpts;
     }
   }
 
