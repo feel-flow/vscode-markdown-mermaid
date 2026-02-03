@@ -6,6 +6,7 @@
  */
 
 import * as fs from 'node:fs';
+import * as fsPromises from 'node:fs/promises';
 import * as path from 'node:path';
 import * as vscode from 'vscode';
 import {
@@ -21,6 +22,16 @@ import {
   MIN_EXPORT_WIDTH,
 } from './constants';
 import type { ExportOptions, MermaidConfig } from './types';
+
+/**
+ * 設定読み込みの結果を表す型（Phase 3 追加）
+ *
+ * success: true の場合、設定の読み込みに成功（ファイル不在を含む）
+ * success: false の場合、エラーが発生（権限エラー、パースエラーなど）
+ */
+export type ConfigLoadResult =
+  | { success: true; config: MermaidConfig; timestamp: number }
+  | { success: false; config: MermaidConfig; error: string };
 
 /** 有効な Mermaid テーマ名 */
 const VALID_THEMES = ['default', 'neutral', 'dark', 'forest', 'base'] as const;
@@ -272,4 +283,144 @@ export function loadMermaidConfig(
     ...getDefaultConfig(),
     ...validated,
   };
+}
+
+/**
+ * ワークスペースルートから .mermaid-config.json を非同期で読み込む（Phase 3 追加）。
+ *
+ * キャッシングと組み合わせて使用することで、設定読み込みを高速化する。
+ * 実装は同期版 loadMermaidConfig() と同じロジックを使用。
+ *
+ * Phase 3 修正: Result 型を返すように変更。エラー時は success: false を返し、
+ * キャッシュに保存されないようにする。
+ *
+ * @param workspaceRoot ワークスペースのルートパス
+ * @param outputChannel ログ出力用の OutputChannel
+ * @returns 設定読み込みの結果。success: true の場合は成功、false の場合はエラー。
+ */
+export async function loadMermaidConfigAsync(
+  workspaceRoot: string,
+  outputChannel: vscode.OutputChannel
+): Promise<ConfigLoadResult> {
+  const configPath = path.join(workspaceRoot, MERMAID_CONFIG_FILENAME);
+
+  // ファイル存在チェック（非同期）
+  try {
+    await fsPromises.access(configPath, fs.constants.F_OK);
+  } catch (err) {
+    // ファイルが存在しない場合は正常ケース（デフォルト設定を使用）
+    if (err instanceof Error && 'code' in err && (err as NodeJS.ErrnoException).code === 'ENOENT') {
+      return { success: true, config: getDefaultConfig(), timestamp: 0 };
+    }
+
+    // その他のエラー（権限エラーなど）はログに記録してデフォルト設定を返す
+    const errorDetail = err instanceof Error ? err.message : String(err);
+    const errorCode =
+      err instanceof Error && 'code' in err ? (err as NodeJS.ErrnoException).code : 'UNKNOWN';
+    outputChannel.appendLine(
+      `[Config] 警告: ${MERMAID_CONFIG_FILENAME} へのアクセスに失敗しました。デフォルト設定を使用します。`
+    );
+    outputChannel.appendLine(`  エラーコード: ${errorCode}, 詳細: ${errorDetail}`);
+    vscode.window.showWarningMessage(
+      `${MERMAID_CONFIG_FILENAME} へのアクセスに失敗しました。詳細は Output パネルを確認してください。`
+    );
+    return { success: false, config: getDefaultConfig(), error: errorDetail };
+  }
+
+  // ファイル読み込み（非同期）
+  let content: string;
+  try {
+    content = await fsPromises.readFile(configPath, 'utf-8');
+  } catch (err) {
+    const errorDetail = err instanceof Error ? err.message : String(err);
+    outputChannel.appendLine(
+      `[Config] ${MERMAID_CONFIG_FILENAME} の読み込みに失敗しました。デフォルト設定を使用します。`
+    );
+    outputChannel.appendLine(`  詳細: ${errorDetail}`);
+    vscode.window.showWarningMessage(
+      `${MERMAID_CONFIG_FILENAME} の読み込みに失敗しました。詳細は Output パネルを確認してください。`
+    );
+    return { success: false, config: getDefaultConfig(), error: errorDetail };
+  }
+
+  // JSON パース
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(content);
+  } catch (err) {
+    const errorDetail = err instanceof Error ? err.message : String(err);
+    outputChannel.appendLine(
+      `[Config] ${MERMAID_CONFIG_FILENAME} のパースに失敗しました。デフォルト設定を使用します。`
+    );
+    outputChannel.appendLine(`  詳細: ${errorDetail}`);
+    vscode.window.showWarningMessage(
+      `${MERMAID_CONFIG_FILENAME} の JSON 形式が不正です。詳細は Output パネルを確認してください。`
+    );
+    return { success: false, config: getDefaultConfig(), error: errorDetail };
+  }
+
+  // 型検証
+  if (typeof parsed !== 'object' || parsed === null) {
+    const error = '設定ファイルがオブジェクトではありません';
+    outputChannel.appendLine(
+      `[Config] ${MERMAID_CONFIG_FILENAME} はオブジェクトである必要があります。デフォルト設定を使用します。`
+    );
+    vscode.window.showWarningMessage(
+      `${MERMAID_CONFIG_FILENAME} の形式が不正です。オブジェクトである必要があります。`
+    );
+    return { success: false, config: getDefaultConfig(), error };
+  }
+
+  // 設定検証
+  const validated = validateConfig(parsed as Record<string, unknown>, outputChannel);
+  outputChannel.appendLine(`[Config] ${MERMAID_CONFIG_FILENAME} を読み込みました。`);
+
+  // ファイルの mtime を取得して返す
+  const stats = await fsPromises.stat(configPath);
+  return {
+    success: true,
+    config: {
+      ...getDefaultConfig(),
+      ...validated,
+    },
+    timestamp: stats.mtimeMs,
+  };
+}
+
+/**
+ * ファイルの最終更新時刻（mtime）を取得する（Phase 3 追加）。
+ *
+ * キャッシュエントリに記録するために使用。実際の無効化は FileSystemWatcher で行われる。
+ *
+ * Phase 3 修正: エラーの種類を区別し、ENOENT のみを正常ケースとして扱う。
+ *
+ * @param filePath ファイルパス
+ * @param outputChannel ログ出力用の OutputChannel（オプション）
+ * @returns 最終更新時刻（ms）。ファイルが存在しない場合は 0。
+ */
+export async function getFileTimestamp(
+  filePath: string,
+  outputChannel?: vscode.OutputChannel
+): Promise<number> {
+  try {
+    const stats = await fsPromises.stat(filePath);
+    return stats.mtimeMs;
+  } catch (err) {
+    // ファイルが存在しない場合は 0 を返す（正常ケース）
+    if (err instanceof Error && 'code' in err && (err as NodeJS.ErrnoException).code === 'ENOENT') {
+      return 0;
+    }
+
+    // その他のエラーはログに記録
+    const errorDetail = err instanceof Error ? err.message : String(err);
+    const errorCode =
+      err instanceof Error && 'code' in err ? (err as NodeJS.ErrnoException).code : 'UNKNOWN';
+    outputChannel?.appendLine(
+      `[Config] 警告: ファイルの stat 取得に失敗しました: ${filePath}`
+    );
+    outputChannel?.appendLine(`  エラーコード: ${errorCode}, 詳細: ${errorDetail}`);
+
+    // エラー時も 0 を返すが、ログで状況を記録
+    return 0;
+  }
 }
