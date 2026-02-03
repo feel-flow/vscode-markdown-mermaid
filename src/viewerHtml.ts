@@ -58,12 +58,19 @@ function splitMarkdownAndMermaid(markdown: string): Array<{ kind: 'markdown' | '
 
 /**
  * MermaidConfig を JSON 文字列に変換する。
- * 循環参照や BigInt などで失敗した場合はエラーをスローする。
+ * - theme !== 'base' の場合、themeVariables は除外される（Mermaid 仕様）
+ * - 循環参照や BigInt などで失敗した場合はエラーをスローする
  */
 function stringifyMermaidConfig(config: MermaidConfig): string {
-  const configWithDefaults = { ...config, startOnLoad: false };
+  // base テーマ以外では themeVariables を除外（Mermaid の仕様に準拠）
+  const { themeVariables, ...restConfig } = config;
+  const effectiveConfig: MermaidConfig =
+    config.theme === 'base'
+      ? { ...config, startOnLoad: false }
+      : { ...restConfig, startOnLoad: false };
+
   try {
-    return JSON.stringify(configWithDefaults);
+    return JSON.stringify(effectiveConfig);
   } catch (err) {
     const detail = err instanceof Error ? err.message : String(err);
     throw new Error(
