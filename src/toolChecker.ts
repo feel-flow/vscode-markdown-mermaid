@@ -35,11 +35,15 @@ export async function checkMermaidFilter(
   } catch (err) {
     const errorDetail = err instanceof Error ? err.message : String(err);
     const errorCode = (err as { code?: string }).code;
+    const stderr = (err as { stderr?: string }).stderr;
 
     // ENOENT (コマンドが見つからない) と他のエラーを区別
     if (errorCode === 'ENOENT') {
       outputChannel.appendLine(`[ToolCheck] mermaid-filter が見つかりません。`);
       outputChannel.appendLine(`  詳細: ${errorDetail}`);
+      if (stderr) {
+        outputChannel.appendLine(`  stderr: ${stderr}`);
+      }
       return {
         available: false,
         errorMessage: 'mermaid-filter が見つかりません。\nインストール方法: npm install -g mermaid-filter'
@@ -50,6 +54,9 @@ export async function checkMermaidFilter(
     outputChannel.appendLine(`[ToolCheck] エラー: mermaid-filter の実行中に予期しないエラーが発生しました。`);
     outputChannel.appendLine(`  エラーコード: ${errorCode || 'unknown'}`);
     outputChannel.appendLine(`  詳細: ${errorDetail}`);
+    if (stderr) {
+      outputChannel.appendLine(`  stderr: ${stderr}`);
+    }
     return {
       available: false,
       errorMessage: `mermaid-filter の実行中にエラーが発生しました: ${errorDetail}`
@@ -73,11 +80,15 @@ export async function checkPandoc(
   } catch (err) {
     const errorDetail = err instanceof Error ? err.message : String(err);
     const errorCode = (err as { code?: string }).code;
+    const stderr = (err as { stderr?: string }).stderr;
 
     // ENOENT (コマンドが見つからない) と他のエラーを区別
     if (errorCode === 'ENOENT') {
       outputChannel.appendLine(`[ToolCheck] Pandoc が見つかりません。`);
       outputChannel.appendLine(`  詳細: ${errorDetail}`);
+      if (stderr) {
+        outputChannel.appendLine(`  stderr: ${stderr}`);
+      }
       return {
         available: false,
         errorMessage: 'Pandoc が見つかりません。\nインストール方法: https://pandoc.org/installing.html'
@@ -88,6 +99,9 @@ export async function checkPandoc(
     outputChannel.appendLine(`[ToolCheck] エラー: Pandoc の実行中に予期しないエラーが発生しました。`);
     outputChannel.appendLine(`  エラーコード: ${errorCode || 'unknown'}`);
     outputChannel.appendLine(`  詳細: ${errorDetail}`);
+    if (stderr) {
+      outputChannel.appendLine(`  stderr: ${stderr}`);
+    }
     return {
       available: false,
       errorMessage: `Pandoc の実行中にエラーが発生しました: ${errorDetail}`

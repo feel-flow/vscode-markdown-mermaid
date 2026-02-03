@@ -56,6 +56,28 @@ export function getDefaultExportOptions(): ExportOptions {
 }
 
 /**
+ * フォーマット設定（epub/pdf.format）を検証するヘルパー関数
+ */
+function validateFormat(
+  formatOpts: unknown,
+  target: 'epub' | 'pdf',
+  outputChannel: vscode.OutputChannel
+): { readonly format: 'png' | 'svg' } | undefined {
+  if (formatOpts !== undefined && typeof formatOpts === 'object' && formatOpts !== null) {
+    const formatContainer = formatOpts as Record<string, unknown>;
+    if (formatContainer.format !== undefined) {
+      if (formatContainer.format === 'png' || formatContainer.format === 'svg') {
+        return { format: formatContainer.format };
+      }
+      outputChannel.appendLine(
+        `[Config] 警告: export.${target}.format の値 "${String(formatContainer.format)}" は無効です。有効な値: png, svg`
+      );
+    }
+  }
+  return undefined;
+}
+
+/**
  * export フィールドの値を検証し、有効なフィールドのみを返す。
  * 無効な値（範囲外・型不一致）は警告を出力し、デフォルト値にフォールバックする。
  */
@@ -94,31 +116,15 @@ function validateExportOptions(
   }
 
   // epub.format の検証
-  if (opts.epub !== undefined && typeof opts.epub === 'object' && opts.epub !== null) {
-    const epub = opts.epub as Record<string, unknown>;
-    if (epub.format !== undefined) {
-      if (epub.format === 'png' || epub.format === 'svg') {
-        validated.epub = { format: epub.format };
-      } else {
-        outputChannel.appendLine(
-          `[Config] 警告: export.epub.format の値 "${String(epub.format)}" は無効です。有効な値: png, svg`
-        );
-      }
-    }
+  const epubFormat = validateFormat(opts.epub, 'epub', outputChannel);
+  if (epubFormat) {
+    validated.epub = epubFormat;
   }
 
   // pdf.format の検証
-  if (opts.pdf !== undefined && typeof opts.pdf === 'object' && opts.pdf !== null) {
-    const pdf = opts.pdf as Record<string, unknown>;
-    if (pdf.format !== undefined) {
-      if (pdf.format === 'png' || pdf.format === 'svg') {
-        validated.pdf = { format: pdf.format };
-      } else {
-        outputChannel.appendLine(
-          `[Config] 警告: export.pdf.format の値 "${String(pdf.format)}" は無効です。有効な値: png, svg`
-        );
-      }
-    }
+  const pdfFormat = validateFormat(opts.pdf, 'pdf', outputChannel);
+  if (pdfFormat) {
+    validated.pdf = pdfFormat;
   }
 
   return validated as Partial<ExportOptions>;
