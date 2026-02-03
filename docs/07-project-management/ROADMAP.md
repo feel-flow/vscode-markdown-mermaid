@@ -1,11 +1,15 @@
 # ROADMAP.md - ロードマップ
 
 ## Phase 1: MVP（必須機能）
-- [ ] VS Code 拡張のスキャフォールド（package.json, extension.ts, アクティベート）
-- [ ] Markdown プレビュー内で Mermaid コードブロックを描画
+
+詳細は [DEVELOPMENT_PLAN.md](./DEVELOPMENT_PLAN.md) を参照。
+
+- [x] VS Code 拡張のスキャフォールド（package.json, extension.ts, アクティベート）
+- [ ] .md を開いたときに「Viewer を開く」ボタンを表示し、クリックで専用 Viewer（Webview）を開く
+- [ ] Viewer 内で Markdown と Mermaid コードブロックを描画
 - [ ] ワークスペースルートの .mermaid-config.json を読み込み、Mermaid.initialize() に渡す
 - [ ] テーマ（default, neutral, dark, forest, base）および base 時の themeVariables に対応
-- [ ] ドキュメント・README の整備（使い方、.mermaid-config.json の例）
+- [ ] ドキュメント・README の整備（Viewer の開き方、.mermaid-config.json の例）
 
 ## Phase 2: 拡張機能（エクスポート）
 - [ ] エクスポート: Markdown + Mermaid → mermaid-filter で図を画像化 → Pandoc で EPUB/PDF

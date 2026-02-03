@@ -6,6 +6,14 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 作業開始前に必ず **[docs/MASTER.md](docs/MASTER.md)** を読むこと。コード生成ルール、禁止事項、実装優先順位が記載されている。
 
+## Git Workflow（必須）
+
+Issue に基づく作業では **必ず** 以下に従うこと。詳細は [AGENTS.md](AGENTS.md) の「Git Workflow」を参照。
+
+1. **実装前にブランチを作成する**: `feature/#<Issue番号>-<簡潔な説明>`（例: `feature/#4-viewer-button-webview`）。
+2. **develop/main で直接実装しない**: すべての変更は feature ブランチで行い、PR でマージする。
+3. 流れ: Issue 確認 → ブランチ作成 → 実装 → コミット → 自己レビュー → PR 作成。
+
 ### ドキュメント構造
 - `docs/MASTER.md` — プロジェクト全体とコード生成ルール（最重要）
 - `docs/01-context/PROJECT.md` — ビジョン・要件
