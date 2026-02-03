@@ -5,7 +5,7 @@
  * LRU（Least Recently Used）アルゴリズムで古いエントリを自動削除。
  *
  * Phase 3: パフォーマンス最適化
- * 期待効果: プレビュー再描画 300-400ms 短縮、キャッシュヒット時は 99% 削減（5ms 未満）
+ * 期待効果: プレビュー再描画の大幅な高速化、キャッシュヒット時はレンダリングをスキップ
  */
 
 import * as vscode from 'vscode';
@@ -14,9 +14,12 @@ import type { MermaidConfig } from './types';
 import { createHash } from './utils/hash';
 
 /**
- * レンダーキャッシュエントリの構造
+ * レンダーキャッシュエントリ
+ *
+ * コンストラクタで不正な値を検証し、エラーをスローする。
+ * これにより、ランタイムでの不正なデータの混入を防ぐ。
  */
-interface RenderCacheEntry {
+class RenderCacheEntry {
   /** キャッシュキー（Markdown + 設定のハッシュ） */
   readonly key: string;
   /** レンダリング済み HTML */
@@ -25,6 +28,26 @@ interface RenderCacheEntry {
   readonly size: number;
   /** 最終アクセス時刻（ms）。LRU の判定に使用。 */
   lastAccessTime: number;
+
+  constructor(key: string, html: string, size: number, lastAccessTime: number) {
+    if (!key || key.trim().length === 0) {
+      throw new Error('[RenderCacheEntry] key は空文字列にできません。');
+    }
+    if (!html) {
+      throw new Error('[RenderCacheEntry] html は空文字列にできません。');
+    }
+    if (size < 0) {
+      throw new Error(`[RenderCacheEntry] size は負数にできません: ${size}`);
+    }
+    if (lastAccessTime < 0) {
+      throw new Error(`[RenderCacheEntry] lastAccessTime は負数にできません: ${lastAccessTime}`);
+    }
+
+    this.key = key;
+    this.html = html;
+    this.size = size;
+    this.lastAccessTime = lastAccessTime;
+  }
 }
 
 /**
@@ -80,6 +103,9 @@ export class RenderCache {
    * キャッシュが最大エントリ数またはメモリ制限に達している場合、
    * 最も古いエントリを削除する（LRU）。
    *
+   * 単一のエントリがメモリ制限を超える場合はキャッシュに保存しない。
+   * これにより、無限ループを防ぐ。
+   *
    * @param markdown Markdown の内容
    * @param config Mermaid 設定
    * @param html レンダリング済み HTML
@@ -97,6 +123,17 @@ export class RenderCache {
 
     // メモリ制限チェック（20MB = 20 * 1024 * 1024 bytes）
     const maxMemoryBytes = MAX_RENDER_CACHE_MEMORY_MB * 1024 * 1024;
+
+    // 境界チェック: 単一エントリがメモリ制限を超える場合はキャッシュしない
+    // これにより、while ループが無限に続くことを防ぐ
+    if (size > maxMemoryBytes) {
+      this.outputChannel?.appendLine(
+        `[RenderCache] エントリが大きすぎるためキャッシュに保存しませんでした: ${size} bytes (制限: ${maxMemoryBytes} bytes)`
+      );
+      return;
+    }
+
+    // LRU でメモリを確保
     while (
       this.currentMemoryBytes + size > maxMemoryBytes ||
       this.cache.size >= MAX_RENDER_CACHE_ENTRIES
@@ -104,12 +141,7 @@ export class RenderCache {
       this.evictLRU();
     }
 
-    const entry: RenderCacheEntry = {
-      key,
-      html,
-      size,
-      lastAccessTime: Date.now(),
-    };
+    const entry = new RenderCacheEntry(key, html, size, Date.now());
 
     this.cache.set(key, entry);
     this.currentMemoryBytes += size;
@@ -131,7 +163,12 @@ export class RenderCache {
   }
 
   /**
-   * LRU アルゴリズムで最も古いエントリを削除する。
+   * 線形探索で最も古いエントリを削除する（簡易 LRU）。
+   *
+   * 全エントリを走査して lastAccessTime が最小のものを削除する。
+   * 計算量は O(n) だが、キャッシュサイズが小さい（最大 50 エントリ）ため実用上問題ない。
+   *
+   * 真の LRU（O(1)）の実装には二重リンクリストとハッシュマップが必要。
    */
   private evictLRU(): void {
     let oldestKey: string | undefined;
