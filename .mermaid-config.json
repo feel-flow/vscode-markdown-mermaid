@@ -1,0 +1,13 @@
+{
+  "theme": "neutral",
+  "export": {
+    "dpi": 300,
+    "width": 800,
+    "epub": {
+      "format": "png"
+    },
+    "pdf": {
+      "format": "svg"
+    }
+  }
+}

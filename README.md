@@ -12,7 +12,10 @@ VS Code 拡張「**Markdown Mermaid Viewer**」です。Markdown 内の Mermaid 
 - ✅ Markdown 内の Mermaid ブロック（**\`\`\`mermaid**）をプレビュー
 - ✅ `.mermaid-config.json` でテーマやスタイルをカスタマイズ
 - ✅ 印刷・電子書籍向けの `neutral` テーマをデフォルト採用
-- 🚧 EPUB/PDF エクスポート（Phase 2 で対応予定）
+- ✅ **EPUB/PDF エクスポート**（mermaid-filter + Pandoc）
+  - Mermaid 図を画像に自動変換
+  - 解像度・幅・形式を細かく設定可能
+  - Kindle/電子書籍向けに最適化
 
 ## インストール
 
@@ -33,6 +36,43 @@ npm run compile
 
 # VS Code でデバッグ実行（F5）
 ```
+
+## エクスポート機能の依存関係
+
+EPUB/PDF エクスポート機能を使用するには、以下のツールが必要です。
+
+### 必須
+
+- **[mermaid-filter](https://github.com/raghur/mermaid-filter)**: Mermaid ブロックを画像に変換
+- **[Pandoc](https://pandoc.org/)**: Markdown → EPUB/PDF 変換
+
+```bash
+# mermaid-filter のインストール
+npm install -g mermaid-filter
+
+# Pandoc のインストール（macOS）
+brew install pandoc
+
+# Pandoc のインストール（その他の OS）
+# https://pandoc.org/installing.html を参照
+```
+
+### PDF エクスポート用（オプション）
+
+PDF エクスポートには、追加で以下が必要です：
+
+- **pdflatex**: PDF 生成エンジン（[MacTeX](https://tug.org/mactex/) に含まれる）
+- **rsvg-convert**: SVG → PDF 変換用（SVG 形式を使用する場合のみ）
+
+```bash
+# pdflatex のインストール（macOS）
+brew install --cask mactex
+
+# rsvg-convert のインストール（macOS）
+brew install librsvg
+```
+
+> **注意**: pdflatex は大きなパッケージ（数 GB）です。EPUB エクスポートのみを使用する場合は不要です。
 
 ## 使い方
 
@@ -66,6 +106,17 @@ graph TD
     D --> E
 ```
 ~~~
+
+### 4. EPUB/PDF にエクスポート（Phase 2）
+
+コマンドパレット（`Ctrl+Shift+P` / `Cmd+Shift+P`）から以下のコマンドを実行します：
+
+- **「EPUB にエクスポート」**: EPUB 形式でエクスポート
+- **「PDF にエクスポート」**: PDF 形式でエクスポート
+
+または、エディタ右上のボタンからもエクスポートできます。
+
+Mermaid 図は自動的に画像（PNG/SVG）に変換され、ドキュメントに埋め込まれます。
 
 ## 設定（.mermaid-config.json）
 
@@ -120,12 +171,43 @@ graph TD
 
 > **セキュリティ**: `themeCSS` で `url()`, `expression()`, `javascript:`, `@import` は使用できません。
 
+### エクスポート設定例（Phase 2）
+
+`export` フィールドで、EPUB/PDF エクスポート時の画像設定をカスタマイズできます。
+
+```json
+{
+  "theme": "neutral",
+  "export": {
+    "dpi": 300,
+    "width": 800,
+    "epub": {
+      "format": "png"
+    },
+    "pdf": {
+      "format": "svg"
+    }
+  }
+}
+```
+
+| プロパティ | 説明 | デフォルト値 | 範囲 |
+|-----------|------|------------|------|
+| `dpi` | 解像度（DPI） | 300 | 72-600 |
+| `width` | 図の最大幅（px） | 800 | 400-2000 |
+| `epub.format` | EPUB 用画像形式 | `png` | `png` / `svg` |
+| `pdf.format` | PDF 用画像形式 | `svg` | `png` / `svg` |
+
+**推奨設定:**
+- **Kindle/電子書籍**: `dpi: 300`, `epub.format: "png"`（互換性重視）
+- **印刷/高品質 PDF**: `dpi: 300-600`, `pdf.format: "svg"`（ベクター形式で高品質）
+
 ## ロードマップ
 
 | Phase | 内容 | 状態 |
 |-------|------|------|
 | **Phase 1** | Mermaid プレビュー + .mermaid-config.json 対応 | ✅ 完了 |
-| **Phase 2** | EPUB/PDF エクスポート（mermaid-filter + Pandoc） | 🚧 予定 |
+| **Phase 2** | EPUB/PDF エクスポート（mermaid-filter + Pandoc） | ✅ 完了 |
 | **Phase 3** | パフォーマンス最適化、KDP 向け補助機能 | 📋 計画中 |
 
 ## 開発者向け情報
