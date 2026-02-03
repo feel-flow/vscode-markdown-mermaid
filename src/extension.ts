@@ -8,8 +8,7 @@ import * as crypto from 'node:crypto';
 import * as path from 'node:path';
 import * as vscode from 'vscode';
 import { configCache } from './configCache';
-import { getDefaultConfig, getFileTimestamp, loadMermaidConfigAsync } from './configLoader';
-import { MERMAID_CONFIG_FILENAME } from './constants';
+import { getDefaultConfig, loadMermaidConfigAsync } from './configLoader';
 import { runExportPipeline } from './exportPipeline';
 import { checkExportDependencies } from './toolChecker';
 import { getViewerHtml } from './viewerHtml';
@@ -36,6 +35,8 @@ const VIEWER_OPEN_ERROR_MESSAGE = 'Viewer の表示に失敗しました。';
  *
  * キャッシュヒット時はキャッシュから返す。ミス時は非同期で読み込み、キャッシュに保存する。
  *
+ * Phase 3 修正: エラー時はキャッシュに保存しないように変更。
+ *
  * @param workspaceRoot ワークスペースのルートパス
  * @returns Mermaid 設定
  */
@@ -47,54 +48,60 @@ async function loadConfigWithCache(workspaceRoot: string): Promise<MermaidConfig
   }
 
   // キャッシュミス: 非同期で読み込む
-  const config = await loadMermaidConfigAsync(workspaceRoot, outputChannel);
-  const configPath = path.join(workspaceRoot, MERMAID_CONFIG_FILENAME);
-  const timestamp = await getFileTimestamp(configPath);
+  const result = await loadMermaidConfigAsync(workspaceRoot, outputChannel);
 
-  // キャッシュに保存
-  configCache.set(workspaceRoot, config, timestamp);
+  // 成功時のみキャッシュに保存
+  if (result.success) {
+    configCache.set(workspaceRoot, result.config, result.timestamp);
+  } else {
+    outputChannel.appendLine(
+      '[ConfigCache] エラーが発生したためキャッシュに保存しませんでした。次回も再読み込みを試みます。'
+    );
+  }
 
-  return config;
+  return result.config;
 }
 
 /**
  * 「Viewer を開く」コマンドを実行する。
  * アクティブな .md の内容を Webview で Markdown + Mermaid として表示する。
+ *
+ * Phase 3 修正: 関数全体を try-catch で囲み、すべてのエラーを適切にハンドリング。
  */
 async function openViewer(): Promise<void> {
-  const editor = vscode.window.activeTextEditor;
-  if (!editor || editor.document.languageId !== 'markdown') {
-    vscode.window.showWarningMessage(
-      'Markdown ファイルを開いてから「Viewer を開く」を実行してください。'
-    );
-    return;
-  }
-  const doc = editor.document;
-  const markdown = doc.getText();
-
-  // ワークスペースルートから Mermaid 設定を読み込む（Phase 3: キャッシング対応）
-  const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
-  let mermaidConfig: MermaidConfig;
-
-  if (workspaceFolder) {
-    mermaidConfig = await loadConfigWithCache(workspaceFolder.uri.fsPath);
-  } else {
-    mermaidConfig = getDefaultConfig();
-    outputChannel.appendLine(
-      '[Config] ワークスペースが開かれていないため、デフォルト設定を使用します。'
-    );
-  }
-
-  outputChannel.appendLine(`[Viewer] Mermaid 設定: theme=${mermaidConfig.theme}`);
-
-  const panel = vscode.window.createWebviewPanel(
-    'markdownMermaidViewer',
-    `${doc.fileName} - Viewer`,
-    vscode.ViewColumn.Beside,
-    { enableScripts: true }
-  );
-  const nonce = getNonce();
   try {
+    const editor = vscode.window.activeTextEditor;
+    if (!editor || editor.document.languageId !== 'markdown') {
+      vscode.window.showWarningMessage(
+        'Markdown ファイルを開いてから「Viewer を開く」を実行してください。'
+      );
+      return;
+    }
+    const doc = editor.document;
+    const markdown = doc.getText();
+
+    // ワークスペースルートから Mermaid 設定を読み込む（Phase 3: キャッシング対応）
+    const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+    let mermaidConfig: MermaidConfig;
+
+    if (workspaceFolder) {
+      mermaidConfig = await loadConfigWithCache(workspaceFolder.uri.fsPath);
+    } else {
+      mermaidConfig = getDefaultConfig();
+      outputChannel.appendLine(
+        '[Config] ワークスペースが開かれていないため、デフォルト設定を使用します。'
+      );
+    }
+
+    outputChannel.appendLine(`[Viewer] Mermaid 設定: theme=${mermaidConfig.theme}`);
+
+    const panel = vscode.window.createWebviewPanel(
+      'markdownMermaidViewer',
+      `${doc.fileName} - Viewer`,
+      vscode.ViewColumn.Beside,
+      { enableScripts: true }
+    );
+    const nonce = getNonce();
     panel.webview.html = getViewerHtml(markdown, panel.webview.cspSource, nonce, mermaidConfig);
   } catch (err) {
     const errorDetail = err instanceof Error ? err.message : String(err);

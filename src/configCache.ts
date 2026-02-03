@@ -18,7 +18,7 @@ import type { MermaidConfig } from './types';
 interface ConfigCacheEntry {
   /** キャッシュされた設定 */
   readonly config: MermaidConfig;
-  /** ファイルの最終更新時刻（ms）。変更検知に使用。 */
+  /** ファイルの最終更新時刻（ms）。デバッグ・監査用に記録。実際の変更検知は FileSystemWatcher で行われる。 */
   readonly timestamp: number;
   /** 最終アクセス時刻（ms）。LRU の判定に使用。 */
   lastAccessTime: number;
@@ -71,6 +71,8 @@ export class ConfigCache {
    *
    * キャッシュが最大エントリ数に達している場合、最も古いエントリを削除する（LRU）。
    *
+   * Phase 3 修正: config を deep freeze して不変性を保証。
+   *
    * @param workspaceRoot ワークスペースのルートパス
    * @param config キャッシュする設定
    * @param timestamp ファイルの最終更新時刻（ms）
@@ -81,8 +83,11 @@ export class ConfigCache {
       this.evictLRU();
     }
 
+    // config を deep clone してから freeze（不変性を保証）
+    const frozenConfig = Object.freeze(structuredClone(config));
+
     const entry: ConfigCacheEntry = {
-      config,
+      config: frozenConfig,
       timestamp,
       lastAccessTime: Date.now(),
     };
@@ -104,6 +109,8 @@ export class ConfigCache {
    * FileSystemWatcher を使用して .mermaid-config.json の変更を検知し、
    * 変更時に該当するキャッシュを無効化する。
    *
+   * Phase 3 修正: エラーハンドリングを追加し、ウォッチャー作成失敗時も安全に動作する。
+   *
    * @param workspaceRoot ワークスペースのルートパス
    */
   private watchConfigFile(workspaceRoot: string): void {
@@ -112,23 +119,42 @@ export class ConfigCache {
       return;
     }
 
-    const configPattern = new vscode.RelativePattern(workspaceRoot, MERMAID_CONFIG_FILENAME);
-    const watcher = vscode.workspace.createFileSystemWatcher(configPattern);
+    try {
+      const configPattern = new vscode.RelativePattern(workspaceRoot, MERMAID_CONFIG_FILENAME);
+      const watcher = vscode.workspace.createFileSystemWatcher(configPattern);
 
-    // ファイル変更時にキャッシュを無効化
-    const invalidateCache = (): void => {
-      this.invalidate(workspaceRoot);
+      // ファイル変更時にキャッシュを無効化
+      const invalidateCache = (): void => {
+        try {
+          this.invalidate(workspaceRoot);
+          this.outputChannel?.appendLine(
+            `[ConfigCache] ${MERMAID_CONFIG_FILENAME} が変更されました。キャッシュを無効化しました。`
+          );
+        } catch (err) {
+          const errorDetail = err instanceof Error ? err.message : String(err);
+          this.outputChannel?.appendLine(
+            `[ConfigCache] エラー: キャッシュ無効化に失敗しました: ${errorDetail}`
+          );
+          // エラーを再スローせず、ウォッチャーを継続
+        }
+      };
+
+      watcher.onDidChange(invalidateCache);
+      watcher.onDidCreate(invalidateCache);
+      watcher.onDidDelete(invalidateCache);
+
+      this.watchers.set(workspaceRoot, watcher);
+      this.outputChannel?.appendLine(`[ConfigCache] ファイルウォッチャーを設定: ${workspaceRoot}`);
+    } catch (err) {
+      const errorDetail = err instanceof Error ? err.message : String(err);
       this.outputChannel?.appendLine(
-        `[ConfigCache] ${MERMAID_CONFIG_FILENAME} が変更されました。キャッシュを無効化しました。`
+        `[ConfigCache] 警告: ファイルウォッチャーの作成に失敗しました: ${errorDetail}`
       );
-    };
-
-    watcher.onDidChange(invalidateCache);
-    watcher.onDidCreate(invalidateCache);
-    watcher.onDidDelete(invalidateCache);
-
-    this.watchers.set(workspaceRoot, watcher);
-    this.outputChannel?.appendLine(`[ConfigCache] ファイルウォッチャーを設定: ${workspaceRoot}`);
+      this.outputChannel?.appendLine(
+        `[ConfigCache] 設定ファイルの変更は自動検出されません。手動でキャッシュをクリアしてください。`
+      );
+      // ウォッチャーなしで継続（キャッシュは引き続き使用可能）
+    }
   }
 
   /**
@@ -169,21 +195,39 @@ export class ConfigCache {
 
   /**
    * LRU アルゴリズムで最も古いエントリを削除する。
+   *
+   * Phase 3 修正: 対応するウォッチャーも dispose してリソースリークを防ぐ。
    */
   private evictLRU(): void {
     let oldestKey: string | undefined;
     let oldestTime = Number.POSITIVE_INFINITY;
 
-    for (const [key, entry] of this.cache.entries()) {
-      if (entry.lastAccessTime < oldestTime) {
-        oldestTime = entry.lastAccessTime;
-        oldestKey = key;
+    try {
+      for (const [key, entry] of this.cache.entries()) {
+        if (entry.lastAccessTime < oldestTime) {
+          oldestTime = entry.lastAccessTime;
+          oldestKey = key;
+        }
       }
-    }
 
-    if (oldestKey !== undefined) {
-      this.cache.delete(oldestKey);
-      this.outputChannel?.appendLine(`[ConfigCache] LRU で削除: ${oldestKey}`);
+      if (oldestKey !== undefined) {
+        // キャッシュエントリを削除
+        this.cache.delete(oldestKey);
+
+        // 対応するウォッチャーも dispose
+        const watcher = this.watchers.get(oldestKey);
+        if (watcher !== undefined) {
+          watcher.dispose();
+          this.watchers.delete(oldestKey);
+        }
+
+        this.outputChannel?.appendLine(`[ConfigCache] LRU で削除: ${oldestKey}`);
+      }
+    } catch (err) {
+      const errorDetail = err instanceof Error ? err.message : String(err);
+      this.outputChannel?.appendLine(
+        `[ConfigCache] エラー: LRU 削除に失敗しました: ${errorDetail}`
+      );
     }
   }
 }
