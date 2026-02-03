@@ -44,7 +44,7 @@ npm run compile
 
 エディタ右上の **「Viewer を開く」** ボタンをクリックします。
 
-または、コマンドパレット（`Ctrl+Shift+P` / `Cmd+Shift+P`）から「**Viewer を開く**」を実行します。
+または、コマンドパレット（`Ctrl+Shift+P` / `Cmd+Shift+P`）から「**Viewer を開く**」を実行します（「Mermaid」で検索しても見つかります）。
 
 ### 3. Mermaid 図がレンダリングされる
 
