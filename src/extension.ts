@@ -6,7 +6,7 @@
 
 import * as crypto from 'node:crypto';
 import * as vscode from 'vscode';
-import { loadMermaidConfig } from './configLoader';
+import { getDefaultConfig, loadMermaidConfig } from './configLoader';
 import { getViewerHtml } from './viewerHtml';
 
 /** Webview 用 CSP nonce のバイト数。 */
@@ -40,11 +40,20 @@ function openViewer(): void {
   const doc = editor.document;
   const markdown = doc.getText();
 
-  // ワークスペースルートから Mermaid 設定を読み込む（#6 で Viewer に注入予定）
+  // ワークスペースルートから Mermaid 設定を読み込む
+  // TODO(#6): mermaidConfig を getViewerHtml に渡して Viewer に注入する
   const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
-  if (workspaceFolder) {
-    loadMermaidConfig(workspaceFolder.uri.fsPath, outputChannel);
+  const mermaidConfig = workspaceFolder
+    ? loadMermaidConfig(workspaceFolder.uri.fsPath, outputChannel)
+    : getDefaultConfig();
+
+  if (!workspaceFolder) {
+    outputChannel.appendLine(
+      '[Config] ワークスペースが開かれていないため、デフォルト設定を使用します。'
+    );
   }
+
+  outputChannel.appendLine(`[Viewer] Mermaid 設定: theme=${mermaidConfig.theme}`);
 
   const panel = vscode.window.createWebviewPanel(
     'markdownMermaidViewer',
@@ -56,17 +65,17 @@ function openViewer(): void {
   try {
     panel.webview.html = getViewerHtml(markdown, panel.webview.cspSource, nonce);
   } catch (err) {
+    const errorDetail = err instanceof Error ? err.message : String(err);
     outputChannel.appendLine(`[Viewer] ${VIEWER_OPEN_ERROR_MESSAGE}`);
-    if (err instanceof Error) {
-      outputChannel.appendLine(err.message);
-    }
+    outputChannel.appendLine(`  詳細: ${errorDetail}`);
     vscode.window.showErrorMessage(VIEWER_OPEN_ERROR_MESSAGE);
   }
 }
 
 /**
  * 拡張がアクティベートされたときに呼ばれる。
- * Phase 1: Viewer コマンド登録と設定読み込み。
+ * Phase 1: OutputChannel 初期化と Viewer コマンド登録。
+ * 設定読み込みは openViewer() 内で Viewer を開くたびに実行される。
  */
 export function activate(context: vscode.ExtensionContext): void {
   outputChannel = vscode.window.createOutputChannel('Markdown Mermaid Viewer');

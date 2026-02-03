@@ -10,7 +10,7 @@ export type MermaidTheme = 'default' | 'neutral' | 'dark' | 'forest' | 'base';
 
 /**
  * base テーマ使用時のカスタムテーマ変数。
- * theme === 'base' のときのみ有効（Mermaid 仕様）。
+ * theme === 'base' のときのみ有効。他のテーマでは無視される（Mermaid 仕様）。
  */
 export interface MermaidThemeVariables {
   primaryColor?: string;
@@ -34,6 +34,6 @@ export interface MermaidConfig {
   themeVariables?: MermaidThemeVariables;
   themeCSS?: string;
   startOnLoad?: boolean;
-  securityLevel?: 'strict' | 'loose' | 'antitamper' | 'sandbox';
-  logLevel?: 'fatal' | 'error' | 'warn' | 'info' | 'debug' | 'trace';
+  securityLevel?: 'strict' | 'loose' | 'antiscript' | 'sandbox';
+  logLevel?: 'fatal' | 'error' | 'warn' | 'info' | 'debug' | 'trace' | 0 | 1 | 2 | 3 | 4 | 5;
 }
