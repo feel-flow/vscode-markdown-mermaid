@@ -10,7 +10,8 @@ import {
   VIEWER_RENDER_ERROR_MESSAGE,
 } from './constants';
 
-const md = new MarkdownIt();
+/** 生 HTML を無効化して XSS を防ぐ（docs/MASTER.md セキュリティ要件）。 */
+const md = new MarkdownIt({ html: false });
 
 /** ```mermaid ... ``` のブロックを分割する正規表現（改行付き）。 */
 const MERMAID_BLOCK_REGEX = /```mermaid\s*\n([\s\S]*?)```/gi;

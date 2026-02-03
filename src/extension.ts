@@ -18,6 +18,9 @@ function getNonce(): string {
   return crypto.randomBytes(NONCE_BYTES).toString('base64');
 }
 
+/** Viewer の HTML 生成に失敗したときにユーザーに表示するメッセージ。 */
+const VIEWER_OPEN_ERROR_MESSAGE = 'Viewer の表示に失敗しました。';
+
 /**
  * 「Viewer を開く」コマンドを実行する。
  * アクティブな .md の内容を Webview で Markdown + Mermaid として表示する。
@@ -39,7 +42,16 @@ function openViewer(): void {
     { enableScripts: true }
   );
   const nonce = getNonce();
-  panel.webview.html = getViewerHtml(markdown, panel.webview.cspSource, nonce);
+  try {
+    panel.webview.html = getViewerHtml(markdown, panel.webview.cspSource, nonce);
+  } catch (err) {
+    const outputChannel = vscode.window.createOutputChannel('Markdown Mermaid Viewer');
+    outputChannel.appendLine(`[Viewer] ${VIEWER_OPEN_ERROR_MESSAGE}`);
+    if (err instanceof Error) {
+      outputChannel.appendLine(err.message);
+    }
+    vscode.window.showErrorMessage(VIEWER_OPEN_ERROR_MESSAGE);
+  }
 }
 
 /**
