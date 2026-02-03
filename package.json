@@ -1,0 +1,54 @@
+{
+  "name": "markdown-mermaid-viewer",
+  "displayName": "Markdown Mermaid Viewer",
+  "description": "Markdown 内の Mermaid 図を洗練されたデザインでプレビューし、Kindle 本・EPUB/PDF にしっかり対応します。",
+  "version": "0.1.0",
+  "publisher": "",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/feel-flow/vscode-markdown-mermaid.git"
+  },
+  "engines": {
+    "vscode": "^1.100.0",
+    "node": ">=22.0.0"
+  },
+  "main": "./out/extension.js",
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "contributes": {
+    "configuration": {
+      "title": "Markdown Mermaid Viewer",
+      "properties": {
+        "markdownMermaidViewer.theme": {
+          "type": "string",
+          "default": "neutral",
+          "enum": ["default", "neutral", "dark", "forest", "base"],
+          "description": "Mermaid のテーマ。プロジェクトの .mermaid-config.json がある場合はそちらを優先します。"
+        },
+        "markdownMermaidViewer.configPath": {
+          "type": "string",
+          "default": "",
+          "description": ".mermaid-config.json のパス（ワークスペースルートからの相対パス）。空の場合はルート直下を参照します。"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run package",
+    "compile": "npm run check-types && node esbuild.js",
+    "check-types": "tsc --noEmit",
+    "watch": "node esbuild.js --watch",
+    "package": "npm run check-types && node esbuild.js --production",
+    "lint": "echo 'ESLint は未設定'"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "@types/vscode": "^1.100.0",
+    "@vscode/vsce": "^3.7.0",
+    "esbuild": "^0.27.0",
+    "typescript": "^5.9.0"
+  },
+  "dependencies": {}
+}
