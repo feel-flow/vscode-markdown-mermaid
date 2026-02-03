@@ -1,0 +1,131 @@
+/**
+ * Viewer 用 HTML 生成
+ * docs/02-design/ARCHITECTURE.md, docs/03-implementation/PATTERNS.md を参照。
+ */
+
+import MarkdownIt from 'markdown-it';
+import {
+  DEFAULT_MERMAID_THEME,
+  MERMAID_CDN_URL,
+  VIEWER_RENDER_ERROR_MESSAGE,
+} from './constants';
+
+/** 生 HTML を無効化して XSS を防ぐ（docs/MASTER.md セキュリティ要件）。 */
+const md = new MarkdownIt({ html: false });
+
+/** ```mermaid ... ``` のブロックを分割する正規表現（改行付き）。 */
+const MERMAID_BLOCK_REGEX = /```mermaid\s*\n([\s\S]*?)```/gi;
+
+/**
+ * HTML にエスケープして挿入する（XSS と script 抜け対策）。
+ */
+function escapeHtml(text: string): string {
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+/**
+ * Markdown 本文を Mermaid ブロックとそれ以外に分割する。
+ * @returns [{ kind: 'markdown'|'mermaid', content: string }, ...]
+ */
+function splitMarkdownAndMermaid(markdown: string): Array<{ kind: 'markdown' | 'mermaid'; content: string }> {
+  MERMAID_BLOCK_REGEX.lastIndex = 0;
+  const segments: Array<{ kind: 'markdown' | 'mermaid'; content: string }> = [];
+  const matches = [...markdown.matchAll(MERMAID_BLOCK_REGEX)];
+  let lastIndex = 0;
+  for (const m of matches) {
+    const start = typeof m.index === 'number' ? m.index : 0;
+    const before = markdown.slice(lastIndex, start);
+    if (before.length > 0) {
+      segments.push({ kind: 'markdown', content: before });
+    }
+    const mermaidContent = m[1];
+    if (mermaidContent !== undefined) {
+      segments.push({ kind: 'mermaid', content: mermaidContent.trim() });
+    }
+    lastIndex = start + (m[0]?.length ?? 0);
+  }
+  const after = markdown.slice(lastIndex);
+  if (after.length > 0) {
+    segments.push({ kind: 'markdown', content: after });
+  }
+  if (segments.length === 0 && markdown.length > 0) {
+    segments.push({ kind: 'markdown', content: markdown });
+  }
+  return segments;
+}
+
+/**
+ * Viewer 用の HTML 文字列を生成する。
+ * Markdown は markdown-it で HTML に変換し、Mermaid ブロックは div.mermaid で Mermaid.js に描画させる。
+ * @param markdown - 表示する Markdown 本文
+ * @param cspSource - Webview の cspSource（CSP に含める）
+ * @param nonce - インライン script 用 nonce
+ */
+export function getViewerHtml(
+  markdown: string,
+  cspSource: string,
+  nonce: string
+): string {
+  const segments = splitMarkdownAndMermaid(markdown);
+  const bodyParts: string[] = [];
+
+  for (const seg of segments) {
+    if (seg.kind === 'markdown') {
+      bodyParts.push(md.render(seg.content));
+    } else {
+      bodyParts.push(
+        `<div class="mermaid">${escapeHtml(seg.content)}</div>`
+      );
+    }
+  }
+
+  const bodyHtml = bodyParts.join('\n');
+  const csp = [
+    "default-src 'none'",
+    `script-src 'nonce-${nonce}' ${cspSource} https://cdn.jsdelivr.net`,
+    `style-src 'unsafe-inline' ${cspSource} https://cdn.jsdelivr.net`,
+    `img-src ${cspSource} https: data:`,
+  ].join('; ');
+
+  return `<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="Content-Security-Policy" content="${escapeHtml(csp)}">
+  <script nonce="${nonce}" src="${MERMAID_CDN_URL}"></script>
+</head>
+<body>
+  <div class="viewer-content">${bodyHtml}</div>
+  <script nonce="${nonce}">
+    (function() {
+      if (typeof mermaid === 'undefined') {
+        var el = document.querySelector('.viewer-content');
+        if (el) {
+          var p = document.createElement('p');
+          p.className = 'mermaid-error';
+          p.textContent = 'Mermaid の読み込みに失敗しました。';
+          el.appendChild(p);
+        }
+        return;
+      }
+      mermaid.initialize({ startOnLoad: false, theme: '${DEFAULT_MERMAID_THEME}' });
+      var containers = document.querySelectorAll('.mermaid');
+      if (containers.length === 0) return;
+      mermaid.run({ nodes: Array.from(containers) }).catch(function(err) {
+        var root = document.querySelector('.viewer-content');
+        if (!root) return;
+        var msg = document.createElement('p');
+        msg.className = 'mermaid-error';
+        msg.textContent = '${escapeHtml(VIEWER_RENDER_ERROR_MESSAGE)}';
+        root.appendChild(msg);
+      });
+    })();
+  </script>
+</body>
+</html>`;
+}

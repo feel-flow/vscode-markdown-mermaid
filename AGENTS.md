@@ -8,6 +8,13 @@
 ## MANDATORY: 作業開始前に MASTER.md を参照
 **このプロジェクトで作業を開始する前に、必ず `docs/MASTER.md` を読み、内容を理解してください。**
 
+## MANDATORY: Git Workflow に必ず従う
+**Issue に基づく作業では、実装を始める前に必ず Git Workflow を踏むこと。コード変更は feature ブランチ上でのみ行う。**
+
+1. **ブランチを先に作成する**: 実装やファイル編集の前に、対象 Issue 用のブランチを必ず作成する。命名: `feature/#<Issue番号>-<簡潔な説明>`（例: `feature/#4-viewer-button-webview`）。
+2. **develop/main で直接実装しない**: 機能追加・バグ修正は feature ブランチで行い、PR 経由でマージする。
+3. **作業の流れ**: Issue 確認 → ブランチ作成 → 実装 → コミット（メッセージに docs 参照を含める）→ 自己レビュー → PR 作成。
+
 ### なぜ MASTER.md が重要なのか
 MASTER.md には以下が含まれます：
 - プロジェクト識別情報（名前、バージョン、使用 AI ツール）

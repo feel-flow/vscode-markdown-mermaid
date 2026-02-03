@@ -23,10 +23,16 @@ This is the **Markdown Mermaid Viewer** VS Code extension project. It provides a
 - `docs/06-reference/GLOSSARY.md` — glossary
 - `docs/07-project-management/ROADMAP.md` — roadmap
 
+## MANDATORY: Git Workflow
+- **Always work on a feature branch.** Before writing any code for an Issue, create the branch: `feature/#<issue-number>-<short-description>` (e.g. `feature/#4-viewer-button-webview`).
+- **Never implement directly on develop or main.** All changes go through a feature branch and PR.
+- Flow: Confirm Issue → Create branch → Implement → Commit (include doc refs in message) → Self-review → Open PR.
+
 ## Before Generating Code
-1. Read `docs/MASTER.md` for project context
-2. Check `docs/03-implementation/PATTERNS.md` for implementation patterns
-3. Verify `docs/02-design/ARCHITECTURE.md` for technical decisions
+1. Create or switch to the feature branch for the target Issue (see Git Workflow above).
+2. Read `docs/MASTER.md` for project context
+3. Check `docs/03-implementation/PATTERNS.md` for implementation patterns
+4. Verify `docs/02-design/ARCHITECTURE.md` for technical decisions
 
 ## Implementation Priority
 1. **Phase 1**: Mermaid preview with .mermaid-config.json
