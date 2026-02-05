@@ -10,11 +10,9 @@ import * as fsPromises from 'node:fs/promises';
 import * as path from 'node:path';
 import * as vscode from 'vscode';
 import {
-  DEFAULT_AUTO_DISABLE_THEME_CSS_ON_CRITICAL,
   DEFAULT_EPUB_FORMAT,
   DEFAULT_EXPORT_DPI,
   DEFAULT_EXPORT_WIDTH,
-  DEFAULT_KINDLE_CSS_CHECKER_ENABLED,
   DEFAULT_MERMAID_THEME,
   DEFAULT_PDF_FORMAT,
   MAX_EXPORT_DPI,
@@ -191,30 +189,49 @@ function validateConfig(
         );
       } else {
         // Kindle CSS 互換性チェック（Phase 3 追加）
-        if (DEFAULT_KINDLE_CSS_CHECKER_ENABLED) {
-          const validationResult = validateCss(config.themeCSS);
-          if (validationResult.issues.length > 0) {
-            outputChannel.appendLine('[Kindle CSS] themeCSS の互換性チェック結果:');
-            outputChannel.appendLine(formatValidationResult(validationResult));
+        // VS Code 設定から読み取る
+        const vscodeConfig = vscode.workspace.getConfiguration('markdownMermaidViewer');
+        const enableKindleCssChecker = vscodeConfig.get<boolean>('enableKindleCssChecker', true);
+        const autoDisableOnCritical = vscodeConfig.get<boolean>('autoDisableThemeCssOnCritical', false);
 
-            // Critical な問題がある場合は警告を表示
-            if (!validationResult.isValid) {
-              if (DEFAULT_AUTO_DISABLE_THEME_CSS_ON_CRITICAL) {
-                outputChannel.appendLine(
-                  '[Kindle CSS] Critical な問題が検出されたため、themeCSS を無効化しました。'
-                );
-                // themeCSS を設定しない（無効化）
+        if (enableKindleCssChecker) {
+          try {
+            const validationResult = validateCss(config.themeCSS);
+            if (validationResult.issues.length > 0) {
+              outputChannel.appendLine('[Kindle CSS] themeCSS の互換性チェック結果:');
+              outputChannel.appendLine(formatValidationResult(validationResult));
+
+              // Critical な問題がある場合は警告を表示
+              if (!validationResult.isValid) {
+                if (autoDisableOnCritical) {
+                  outputChannel.appendLine(
+                    '[Kindle CSS] Critical な問題が検出されたため、themeCSS を無効化しました。'
+                  );
+                  // ユーザーに通知
+                  vscode.window.showWarningMessage(
+                    `Kindle CSS チェック: Critical な問題が ${validationResult.criticalCount} 件検出されたため、themeCSS を無効化しました。詳細は Output パネルを確認してください。`
+                  );
+                  // themeCSS を設定しない（無効化）
+                } else {
+                  outputChannel.appendLine(
+                    '[Kindle CSS] Critical な問題がありますが、themeCSS は有効なままです。'
+                  );
+                  validated.themeCSS = config.themeCSS;
+                }
               } else {
-                outputChannel.appendLine(
-                  '[Kindle CSS] Critical な問題がありますが、themeCSS は有効なままです。'
-                );
+                // Warning/Info のみの場合は有効なまま
                 validated.themeCSS = config.themeCSS;
               }
             } else {
-              // Warning/Info のみの場合は有効なまま
               validated.themeCSS = config.themeCSS;
             }
-          } else {
+          } catch (err) {
+            // CSS 検証中に予期しないエラーが発生した場合
+            const errorDetail = err instanceof Error ? err.message : String(err);
+            outputChannel.appendLine(
+              `[Kindle CSS] CSS 検証中に予期しないエラーが発生しました: ${errorDetail}`
+            );
+            outputChannel.appendLine('[Kindle CSS] themeCSS は検証をスキップして適用されます。');
             validated.themeCSS = config.themeCSS;
           }
         } else {

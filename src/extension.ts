@@ -170,10 +170,20 @@ async function exportDocument(target: 'epub' | 'pdf'): Promise<void> {
   // Phase 3: EPUB エクスポート時はテンプレートを取得
   let kindleTemplate: KindleTemplate | undefined;
   if (target === 'epub') {
+    // extensionContext が初期化されているか確認
+    if (!extensionContext) {
+      outputChannel.appendLine('[Export] エラー: 拡張機能が正しく初期化されていません');
+      vscode.window.showErrorMessage('拡張機能の初期化が完了していません。しばらく待ってから再試行してください。');
+      return;
+    }
     kindleTemplate = await getCurrentTemplate(extensionContext.extensionPath);
     if (kindleTemplate) {
       outputChannel.appendLine(
         `[Export] Kindle テンプレート: ${kindleTemplate.metadata.displayName}`
+      );
+    } else {
+      outputChannel.appendLine(
+        '[Export] Kindle テンプレートが取得できませんでした。デフォルト設定でエクスポートします。'
       );
     }
   }
@@ -301,6 +311,9 @@ async function getCurrentTemplate(
       outputChannel.appendLine(
         '[Template] カスタムテンプレートが選択されていますが、パスが設定されていません'
       );
+      vscode.window.showWarningMessage(
+        'カスタムテンプレートが選択されていますが、パスが設定されていません。デフォルト設定でエクスポートします。'
+      );
       return undefined;
     }
 
@@ -309,6 +322,9 @@ async function getCurrentTemplate(
     } catch (err) {
       const errorDetail = err instanceof Error ? err.message : String(err);
       outputChannel.appendLine(`[Template] カスタムテンプレートの読み込みに失敗: ${errorDetail}`);
+      vscode.window.showWarningMessage(
+        `カスタムテンプレートの読み込みに失敗しました: ${errorDetail}。デフォルト設定でエクスポートします。`
+      );
       return undefined;
     }
   }

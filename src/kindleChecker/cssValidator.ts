@@ -46,8 +46,25 @@ export interface CssValidationResult {
  * @returns 検証結果（問題リスト、カウント、有効性フラグ）
  */
 export function validateCss(css: string): CssValidationResult {
+  // 入力検証
+  if (!css || typeof css !== 'string') {
+    return {
+      issues: [],
+      criticalCount: 0,
+      warningCount: 0,
+      infoCount: 0,
+      isValid: true,
+    };
+  }
+
   const issues: CssValidationIssue[] = [];
   const lines = css.split('\n');
+
+  // パターンのコピーを事前に作成（パフォーマンス最適化）
+  const patterns = KINDLE_CSS_RULES.map((rule) => ({
+    rule,
+    pattern: new RegExp(rule.pattern.source, rule.pattern.flags),
+  }));
 
   // 各行を検証
   for (let lineIndex = 0; lineIndex < lines.length; lineIndex++) {
@@ -55,9 +72,9 @@ export function validateCss(css: string): CssValidationResult {
     const lineNumber = lineIndex + 1;
 
     // 各ルールをチェック
-    for (const rule of KINDLE_CSS_RULES) {
-      // グローバルフラグ付きの正規表現を使うため、lastIndex をリセット
-      const pattern = new RegExp(rule.pattern.source, rule.pattern.flags);
+    for (const { rule, pattern } of patterns) {
+      // lastIndex をリセットして再利用
+      pattern.lastIndex = 0;
       let match: RegExpExecArray | null;
 
       while ((match = pattern.exec(line)) !== null) {

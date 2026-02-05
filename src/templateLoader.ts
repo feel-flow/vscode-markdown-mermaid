@@ -11,6 +11,21 @@ import * as path from 'node:path';
 import * as vscode from 'vscode';
 import type { KindleTemplate, TemplateMetadata } from './types';
 
+/**
+ * ファイルまたはディレクトリが存在するか非同期でチェック
+ *
+ * @param filePath チェック対象のパス
+ * @returns 存在する場合は true
+ */
+async function pathExists(filePath: string): Promise<boolean> {
+  try {
+    await fsPromises.access(filePath, fs.constants.F_OK);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 /** テンプレートディレクトリ名 */
 const TEMPLATES_DIR = 'templates';
 const KINDLE_TEMPLATES_SUBDIR = 'kindle';
@@ -69,10 +84,11 @@ async function loadTemplateFromDir(
   const htmlPath = path.join(templateDir, HTML_FILENAME);
   const cssPath = path.join(templateDir, CSS_FILENAME);
 
-  // 必須ファイルの存在チェック
+  // 必須ファイルの存在チェック（非同期）
   const requiredFiles = [metadataPath, htmlPath, cssPath];
   for (const filePath of requiredFiles) {
-    if (!fs.existsSync(filePath)) {
+    const exists = await pathExists(filePath);
+    if (!exists) {
       const fileName = path.basename(filePath);
       throw new TemplateLoadError(
         `テンプレート "${templateId}" に必須ファイル "${fileName}" がありません`,
@@ -188,7 +204,8 @@ export async function loadBundledTemplates(
   for (const templateId of BUNDLED_TEMPLATE_IDS) {
     const templateDir = path.join(templatesDir, templateId);
 
-    if (!fs.existsSync(templateDir)) {
+    const exists = await pathExists(templateDir);
+    if (!exists) {
       outputChannel?.appendLine(
         `[Template] 警告: テンプレート "${templateId}" のディレクトリが見つかりません`
       );
@@ -227,7 +244,8 @@ export async function getTemplateById(
   const templatesDir = getBundledTemplatesDir(extensionPath);
   const templateDir = path.join(templatesDir, templateId);
 
-  if (fs.existsSync(templateDir)) {
+  const exists = await pathExists(templateDir);
+  if (exists) {
     try {
       return await loadTemplateFromDir(templateDir, true, outputChannel);
     } catch (err) {
@@ -257,7 +275,8 @@ export async function loadCustomTemplate(
 ): Promise<KindleTemplate> {
   outputChannel?.appendLine(`[Template] カスタムテンプレートを読み込み中: ${customTemplateDir}`);
 
-  if (!fs.existsSync(customTemplateDir)) {
+  const exists = await pathExists(customTemplateDir);
+  if (!exists) {
     const templateId = path.basename(customTemplateDir);
     throw new TemplateLoadError(
       `カスタムテンプレートディレクトリが見つかりません: ${customTemplateDir}`,

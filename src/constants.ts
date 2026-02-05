@@ -57,9 +57,6 @@ export const MAX_RENDER_CACHE_ENTRIES = 50;
 export const MAX_RENDER_CACHE_MEMORY_MB = 20;
 
 // ==================== Phase 3: Kindle チェッカー関連定数 ====================
-
-/** Kindle CSS チェッカーを有効にするかどうかのデフォルト値。 */
-export const DEFAULT_KINDLE_CSS_CHECKER_ENABLED = true;
-
-/** Critical な問題が検出された場合に themeCSS を自動的に無効化するかどうかのデフォルト値。 */
-export const DEFAULT_AUTO_DISABLE_THEME_CSS_ON_CRITICAL = false;
+// Note: enableKindleCssChecker と autoDisableThemeCssOnCritical は
+// VS Code 設定（package.json の contributes.configuration）で管理されるため、
+// ここには定数を定義しない。
