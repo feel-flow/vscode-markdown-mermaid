@@ -1,0 +1,8 @@
+{
+  "id": "technical",
+  "displayName": "技術書風",
+  "description": "コードブロックや図表を含む技術書に最適化されたテンプレート。等幅フォントとシンタックスハイライトに対応。",
+  "contentType": "technical",
+  "author": "Markdown Mermaid Viewer",
+  "version": "1.0.0"
+}

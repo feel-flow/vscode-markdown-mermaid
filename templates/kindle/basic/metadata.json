@@ -1,0 +1,8 @@
+{
+  "id": "basic",
+  "displayName": "シンプル",
+  "description": "汎用的なシンプルテンプレート。あらゆるコンテンツに対応する基本スタイル。",
+  "contentType": "general",
+  "author": "Markdown Mermaid Viewer",
+  "version": "1.0.0"
+}

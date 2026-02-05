@@ -1,0 +1,30 @@
+/* 小説風テンプレート - Kindle 互換 CSS */
+/* 実際のスタイルは Issue #29 で実装予定 */
+
+body {
+  font-family: serif;
+  line-height: 1.8;
+  margin: 0;
+  padding: 0;
+}
+
+.content.novel {
+  max-width: 100%;
+}
+
+/* 段落スタイル（プレースホルダー） */
+p {
+  text-indent: 1em;
+  margin: 0;
+}
+
+/* 章タイトル（プレースホルダー） */
+h1, h2, h3 {
+  text-align: center;
+  margin: 2em 0 1em;
+}
+
+/* ルビ対応（プレースホルダー） */
+ruby rt {
+  font-size: 0.5em;
+}

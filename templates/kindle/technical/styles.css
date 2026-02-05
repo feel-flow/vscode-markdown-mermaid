@@ -1,0 +1,29 @@
+/* 技術書風テンプレート - Kindle 互換 CSS */
+/* 実際のスタイルは Issue #29 で実装予定 */
+
+body {
+  font-family: serif;
+  line-height: 1.6;
+  margin: 0;
+  padding: 0;
+}
+
+.content.technical {
+  max-width: 100%;
+}
+
+/* コードブロック用スタイル（プレースホルダー） */
+pre, code {
+  font-family: monospace;
+}
+
+/* 図表用スタイル（プレースホルダー） */
+figure {
+  margin: 1em 0;
+  text-align: center;
+}
+
+img {
+  max-width: 100%;
+  height: auto;
+}
