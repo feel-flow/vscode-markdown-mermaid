@@ -9,7 +9,7 @@ import * as fs from 'node:fs';
 import * as fsPromises from 'node:fs/promises';
 import * as path from 'node:path';
 import * as vscode from 'vscode';
-import type { KindleTemplate, TemplateMetadata } from './types';
+import type { KindleTemplate, TemplateContentType, TemplateMetadata } from './types';
 
 /**
  * ファイルまたはディレクトリが存在するか非同期でチェック
@@ -84,18 +84,21 @@ async function loadTemplateFromDir(
   const htmlPath = path.join(templateDir, HTML_FILENAME);
   const cssPath = path.join(templateDir, CSS_FILENAME);
 
-  // 必須ファイルの存在チェック（非同期）
+  // 必須ファイルの存在チェック（非同期・並行処理）
   const requiredFiles = [metadataPath, htmlPath, cssPath];
-  for (const filePath of requiredFiles) {
-    const exists = await pathExists(filePath);
-    if (!exists) {
-      const fileName = path.basename(filePath);
-      throw new TemplateLoadError(
-        `テンプレート "${templateId}" に必須ファイル "${fileName}" がありません`,
-        templateId
-      );
-    }
-  }
+  await Promise.all(
+    requiredFiles.map(async (filePath) => {
+      try {
+        await fsPromises.access(filePath);
+      } catch {
+        const fileName = path.basename(filePath);
+        throw new TemplateLoadError(
+          `テンプレート "${templateId}" に必須ファイル "${fileName}" がありません`,
+          templateId
+        );
+      }
+    })
+  );
 
   // metadata.json を読み込み
   let metadataContent: string;
@@ -164,10 +167,11 @@ function validateMetadata(
       templateId
     );
   }
+  // 有効な contentType を定数配列で管理（型定義との二重管理を防ぐ）
+  const validContentTypes: readonly TemplateContentType[] = ['technical', 'novel', 'general'];
   if (
-    parsed.contentType !== 'technical' &&
-    parsed.contentType !== 'novel' &&
-    parsed.contentType !== 'general'
+    typeof parsed.contentType !== 'string' ||
+    !validContentTypes.includes(parsed.contentType as TemplateContentType)
   ) {
     throw new TemplateLoadError(
       `テンプレート "${templateId}" の metadata.json に有効な contentType がありません（technical/novel/general）`,
@@ -179,7 +183,7 @@ function validateMetadata(
     id: parsed.id,
     displayName: parsed.displayName,
     description: parsed.description,
-    contentType: parsed.contentType,
+    contentType: parsed.contentType as TemplateContentType,
     author: typeof parsed.author === 'string' ? parsed.author : undefined,
     version: typeof parsed.version === 'string' ? parsed.version : undefined,
   };

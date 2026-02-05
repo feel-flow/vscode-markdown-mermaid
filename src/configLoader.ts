@@ -194,36 +194,32 @@ function validateConfig(
         const enableKindleCssChecker = vscodeConfig.get<boolean>('enableKindleCssChecker', true);
         const autoDisableOnCritical = vscodeConfig.get<boolean>('autoDisableThemeCssOnCritical', false);
 
+        // フラグ変数でロジックをシンプル化
+        let disableThemeCss = false;
+
         if (enableKindleCssChecker) {
           try {
             const validationResult = validateCss(config.themeCSS);
             if (validationResult.issues.length > 0) {
               outputChannel.appendLine('[Kindle CSS] themeCSS の互換性チェック結果:');
               outputChannel.appendLine(formatValidationResult(validationResult));
+            }
 
-              // Critical な問題がある場合は警告を表示
-              if (!validationResult.isValid) {
-                if (autoDisableOnCritical) {
-                  outputChannel.appendLine(
-                    '[Kindle CSS] Critical な問題が検出されたため、themeCSS を無効化しました。'
-                  );
-                  // ユーザーに通知
-                  vscode.window.showWarningMessage(
-                    `Kindle CSS チェック: Critical な問題が ${validationResult.criticalCount} 件検出されたため、themeCSS を無効化しました。詳細は Output パネルを確認してください。`
-                  );
-                  // themeCSS を設定しない（無効化）
-                } else {
-                  outputChannel.appendLine(
-                    '[Kindle CSS] Critical な問題がありますが、themeCSS は有効なままです。'
-                  );
-                  validated.themeCSS = config.themeCSS;
-                }
+            // Critical な問題がある場合の処理
+            if (!validationResult.isValid) {
+              if (autoDisableOnCritical) {
+                outputChannel.appendLine(
+                  '[Kindle CSS] Critical な問題が検出されたため、themeCSS を無効化しました。'
+                );
+                vscode.window.showWarningMessage(
+                  `Kindle CSS チェック: Critical な問題が ${validationResult.criticalCount} 件検出されたため、themeCSS を無効化しました。詳細は Output パネルを確認してください。`
+                );
+                disableThemeCss = true;
               } else {
-                // Warning/Info のみの場合は有効なまま
-                validated.themeCSS = config.themeCSS;
+                outputChannel.appendLine(
+                  '[Kindle CSS] Critical な問題がありますが、themeCSS は有効なままです。'
+                );
               }
-            } else {
-              validated.themeCSS = config.themeCSS;
             }
           } catch (err) {
             // CSS 検証中に予期しないエラーが発生した場合
@@ -232,9 +228,11 @@ function validateConfig(
               `[Kindle CSS] CSS 検証中に予期しないエラーが発生しました: ${errorDetail}`
             );
             outputChannel.appendLine('[Kindle CSS] themeCSS は検証をスキップして適用されます。');
-            validated.themeCSS = config.themeCSS;
           }
-        } else {
+        }
+
+        // themeCSS を無効化しない場合のみ設定
+        if (!disableThemeCss) {
           validated.themeCSS = config.themeCSS;
         }
       }
