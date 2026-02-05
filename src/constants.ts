@@ -55,3 +55,11 @@ export const MAX_RENDER_CACHE_ENTRIES = 50;
 
 /** レンダーキャッシュの最大メモリ使用量（MB）。HTML 文字列のサイズを考慮して 20MB に設定。 */
 export const MAX_RENDER_CACHE_MEMORY_MB = 20;
+
+// ==================== Phase 3: Kindle チェッカー関連定数 ====================
+
+/** Kindle CSS チェッカーを有効にするかどうかのデフォルト値。 */
+export const DEFAULT_KINDLE_CSS_CHECKER_ENABLED = true;
+
+/** Critical な問題が検出された場合に themeCSS を自動的に無効化するかどうかのデフォルト値。 */
+export const DEFAULT_AUTO_DISABLE_THEME_CSS_ON_CRITICAL = false;
