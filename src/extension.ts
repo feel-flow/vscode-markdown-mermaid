@@ -9,6 +9,7 @@ import * as path from 'node:path';
 import * as vscode from 'vscode';
 import { configCache } from './configCache';
 import { getDefaultConfig, loadMermaidConfigAsync } from './configLoader';
+import { formatValidationResult, validateCss } from './kindleChecker/cssValidator';
 import { renderCache } from './renderCache';
 import { runExportPipeline } from './exportPipeline';
 import { checkExportDependencies } from './toolChecker';
@@ -201,6 +202,62 @@ async function exportToPdf(): Promise<void> {
 }
 
 /**
+ * 「Kindle CSS 互換性チェック」コマンドを実行する（Phase 3 追加）
+ *
+ * .mermaid-config.json の themeCSS フィールドを検証し、
+ * Kindle 非互換の CSS プロパティを検出・報告する。
+ */
+async function checkKindleCompatibility(): Promise<void> {
+  const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+
+  if (!workspaceFolder) {
+    vscode.window.showWarningMessage(
+      'ワークスペースを開いてから「Kindle CSS 互換性チェック」を実行してください。'
+    );
+    return;
+  }
+
+  outputChannel.appendLine('[Kindle CSS] 互換性チェックを開始します...');
+  outputChannel.show();
+
+  // 設定を読み込む（キャッシュを使用）
+  const mermaidConfig = await loadConfigWithCache(workspaceFolder.uri.fsPath);
+
+  if (!mermaidConfig.themeCSS) {
+    outputChannel.appendLine('[Kindle CSS] themeCSS が設定されていません。チェックをスキップします。');
+    vscode.window.showInformationMessage(
+      'themeCSS が設定されていません。.mermaid-config.json に themeCSS を追加してください。'
+    );
+    return;
+  }
+
+  // CSS を検証
+  const result = validateCss(mermaidConfig.themeCSS);
+  const formattedResult = formatValidationResult(result);
+
+  outputChannel.appendLine(formattedResult);
+
+  // 結果に応じてメッセージを表示
+  if (result.issues.length === 0) {
+    vscode.window.showInformationMessage(
+      'Kindle CSS チェック: 問題は検出されませんでした。'
+    );
+  } else if (!result.isValid) {
+    vscode.window.showErrorMessage(
+      `Kindle CSS チェック: Critical な問題が ${result.criticalCount} 件検出されました。Output パネルを確認してください。`
+    );
+  } else if (result.warningCount > 0) {
+    vscode.window.showWarningMessage(
+      `Kindle CSS チェック: Warning が ${result.warningCount} 件検出されました。Output パネルを確認してください。`
+    );
+  } else {
+    vscode.window.showInformationMessage(
+      `Kindle CSS チェック: Info が ${result.infoCount} 件検出されました。Output パネルを確認してください。`
+    );
+  }
+}
+
+/**
  * 拡張がアクティベートされたときに呼ばれる。
  * OutputChannel 初期化、Viewer コマンド登録、エクスポートコマンド登録。
  * Phase 3: 設定キャッシュの初期化とワークスペース監視を追加。
@@ -254,6 +311,14 @@ export function activate(context: vscode.ExtensionContext): void {
   );
   context.subscriptions.push(
     vscode.commands.registerCommand('markdownMermaidViewer.exportToPdf', exportToPdf)
+  );
+
+  // Phase 3: Kindle CSS 互換性チェックコマンド
+  context.subscriptions.push(
+    vscode.commands.registerCommand(
+      'markdownMermaidViewer.checkKindleCompatibility',
+      checkKindleCompatibility
+    )
   );
 }
 

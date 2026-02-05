@@ -18,7 +18,8 @@
     "onStartupFinished",
     "onCommand:markdownMermaidViewer.openViewer",
     "onCommand:markdownMermaidViewer.exportToEpub",
-    "onCommand:markdownMermaidViewer.exportToPdf"
+    "onCommand:markdownMermaidViewer.exportToPdf",
+    "onCommand:markdownMermaidViewer.checkKindleCompatibility"
   ],
   "contributes": {
     "commands": [
@@ -35,6 +36,11 @@
         "command": "markdownMermaidViewer.exportToPdf",
         "title": "PDF にエクスポート",
         "icon": "$(file-pdf)"
+      },
+      {
+        "command": "markdownMermaidViewer.checkKindleCompatibility",
+        "title": "Kindle CSS 互換性チェック",
+        "icon": "$(checklist)"
       }
     ],
     "menus": {

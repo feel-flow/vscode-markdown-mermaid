@@ -10,9 +10,11 @@ import * as fsPromises from 'node:fs/promises';
 import * as path from 'node:path';
 import * as vscode from 'vscode';
 import {
+  DEFAULT_AUTO_DISABLE_THEME_CSS_ON_CRITICAL,
   DEFAULT_EPUB_FORMAT,
   DEFAULT_EXPORT_DPI,
   DEFAULT_EXPORT_WIDTH,
+  DEFAULT_KINDLE_CSS_CHECKER_ENABLED,
   DEFAULT_MERMAID_THEME,
   DEFAULT_PDF_FORMAT,
   MAX_EXPORT_DPI,
@@ -21,6 +23,7 @@ import {
   MIN_EXPORT_DPI,
   MIN_EXPORT_WIDTH,
 } from './constants';
+import { formatValidationResult, validateCss } from './kindleChecker/cssValidator';
 import type { ExportOptions, MermaidConfig } from './types';
 
 /**
@@ -176,7 +179,7 @@ function validateConfig(
     }
   }
 
-  // themeCSS の検証（セキュリティチェック付き）
+  // themeCSS の検証（セキュリティチェック + Kindle 互換性チェック）
   if (config.themeCSS !== undefined) {
     if (typeof config.themeCSS === 'string') {
       const hasDangerousPattern = DANGEROUS_CSS_PATTERNS.some((pattern) =>
@@ -187,7 +190,36 @@ function validateConfig(
           '[Config] 警告: themeCSS に禁止パターン（url, expression, javascript, @import）が含まれています。この値は無視されます。'
         );
       } else {
-        validated.themeCSS = config.themeCSS;
+        // Kindle CSS 互換性チェック（Phase 3 追加）
+        if (DEFAULT_KINDLE_CSS_CHECKER_ENABLED) {
+          const validationResult = validateCss(config.themeCSS);
+          if (validationResult.issues.length > 0) {
+            outputChannel.appendLine('[Kindle CSS] themeCSS の互換性チェック結果:');
+            outputChannel.appendLine(formatValidationResult(validationResult));
+
+            // Critical な問題がある場合は警告を表示
+            if (!validationResult.isValid) {
+              if (DEFAULT_AUTO_DISABLE_THEME_CSS_ON_CRITICAL) {
+                outputChannel.appendLine(
+                  '[Kindle CSS] Critical な問題が検出されたため、themeCSS を無効化しました。'
+                );
+                // themeCSS を設定しない（無効化）
+              } else {
+                outputChannel.appendLine(
+                  '[Kindle CSS] Critical な問題がありますが、themeCSS は有効なままです。'
+                );
+                validated.themeCSS = config.themeCSS;
+              }
+            } else {
+              // Warning/Info のみの場合は有効なまま
+              validated.themeCSS = config.themeCSS;
+            }
+          } else {
+            validated.themeCSS = config.themeCSS;
+          }
+        } else {
+          validated.themeCSS = config.themeCSS;
+        }
       }
     } else {
       outputChannel.appendLine('[Config] 警告: themeCSS は文字列である必要があります。');
