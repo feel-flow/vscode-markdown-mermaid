@@ -1,0 +1,8 @@
+{
+  "id": "novel",
+  "displayName": "小説風",
+  "description": "縦書き対応の小説向けテンプレート。読みやすいフォントサイズと行間を設定。",
+  "contentType": "novel",
+  "author": "Markdown Mermaid Viewer",
+  "version": "1.0.0"
+}

@@ -55,3 +55,8 @@ export const MAX_RENDER_CACHE_ENTRIES = 50;
 
 /** レンダーキャッシュの最大メモリ使用量（MB）。HTML 文字列のサイズを考慮して 20MB に設定。 */
 export const MAX_RENDER_CACHE_MEMORY_MB = 20;
+
+// ==================== Phase 3: Kindle チェッカー関連定数 ====================
+// Note: enableKindleCssChecker と autoDisableThemeCssOnCritical は
+// VS Code 設定（package.json の contributes.configuration）で管理されるため、
+// ここには定数を定義しない。

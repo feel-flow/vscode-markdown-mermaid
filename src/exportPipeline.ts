@@ -17,7 +17,7 @@ import {
   resolveImageFormat,
   resolveWidth,
 } from './exportFormatResolver';
-import type { MermaidConfig } from './types';
+import type { KindleTemplate, MermaidConfig } from './types';
 
 const execFile = promisify(childProcess.execFile);
 
@@ -27,6 +27,8 @@ export interface ExportPipelineOptions {
   target: ExportTarget;
   mermaidConfig: MermaidConfig;
   workingDirectory: string;
+  /** Kindle テンプレート（Phase 3 追加、EPUB エクスポート時に使用） */
+  kindleTemplate?: KindleTemplate;
 }
 
 /**
@@ -38,7 +40,7 @@ async function runPandoc(
   dpi: number,
   outputChannel: vscode.OutputChannel
 ): Promise<void> {
-  const { inputPath, outputPath, workingDirectory } = options;
+  const { inputPath, outputPath, workingDirectory, kindleTemplate } = options;
 
   const args = [
     inputPath,
@@ -46,6 +48,13 @@ async function runPandoc(
     '-o', outputPath,
     '--dpi', String(dpi),
   ];
+
+  // Phase 3: Kindle テンプレートが指定されている場合、--template と --css を追加
+  if (kindleTemplate && options.target === 'epub') {
+    args.push('--template', kindleTemplate.paths.html);
+    args.push('--css', kindleTemplate.paths.css);
+    outputChannel.appendLine(`[Export] テンプレート: ${kindleTemplate.metadata.displayName}`);
+  }
 
   outputChannel.appendLine(`[Export] Pandoc コマンド: pandoc ${args.join(' ')}`);
   outputChannel.appendLine(`[Export] 作業ディレクトリ: ${workingDirectory}`);

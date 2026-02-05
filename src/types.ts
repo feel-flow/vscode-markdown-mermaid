@@ -59,3 +59,50 @@ export interface MermaidConfig {
   /** エクスポート設定 */
   export?: ExportOptions;
 }
+
+// ==================== Phase 3: Kindle テンプレート関連型 ====================
+
+/** テンプレートの対象コンテンツ種別 */
+export type TemplateContentType = 'technical' | 'novel' | 'general';
+
+/**
+ * テンプレートメタデータ
+ *
+ * 各テンプレートフォルダの metadata.json に対応。
+ */
+export interface TemplateMetadata {
+  /** テンプレート ID（フォルダ名と一致） */
+  readonly id: string;
+  /** 表示名（日本語） */
+  readonly displayName: string;
+  /** 説明文 */
+  readonly description: string;
+  /** 対象コンテンツ種別 */
+  readonly contentType: TemplateContentType;
+  /** 作成者（任意） */
+  readonly author?: string;
+  /** バージョン（任意） */
+  readonly version?: string;
+}
+
+/**
+ * Kindle テンプレート
+ *
+ * テンプレートローダーが返すオブジェクト。
+ * メタデータとファイルパス、読み込み済みコンテンツを含む。
+ */
+export interface KindleTemplate {
+  /** テンプレートメタデータ */
+  readonly metadata: TemplateMetadata;
+  /** テンプレートファイルのパス */
+  readonly paths: {
+    /** metadata.json のパス */
+    readonly metadata: string;
+    /** template.html のパス */
+    readonly html: string;
+    /** styles.css のパス */
+    readonly css: string;
+  };
+  /** バンドル済みテンプレートかどうか（false の場合はカスタムテンプレート） */
+  readonly isBundled: boolean;
+}

@@ -1,0 +1,29 @@
+/* シンプルテンプレート - Kindle 互換 CSS */
+/* 実際のスタイルは Issue #29 で実装予定 */
+
+body {
+  font-family: serif;
+  line-height: 1.6;
+  margin: 0;
+  padding: 0;
+}
+
+.content.basic {
+  max-width: 100%;
+}
+
+/* 見出し（プレースホルダー） */
+h1, h2, h3, h4, h5, h6 {
+  margin: 1.5em 0 0.5em;
+}
+
+/* 段落（プレースホルダー） */
+p {
+  margin: 0.5em 0;
+}
+
+/* 画像（プレースホルダー） */
+img {
+  max-width: 100%;
+  height: auto;
+}

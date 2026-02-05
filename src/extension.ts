@@ -9,17 +9,27 @@ import * as path from 'node:path';
 import * as vscode from 'vscode';
 import { configCache } from './configCache';
 import { getDefaultConfig, loadMermaidConfigAsync } from './configLoader';
+import { formatValidationResult, validateCss } from './kindleChecker/cssValidator';
 import { renderCache } from './renderCache';
 import { runExportPipeline } from './exportPipeline';
+import {
+  DEFAULT_TEMPLATE_ID,
+  getTemplateById,
+  loadBundledTemplates,
+  loadCustomTemplate,
+} from './templateLoader';
 import { checkExportDependencies } from './toolChecker';
 import { getViewerHtml } from './viewerHtml';
-import type { MermaidConfig } from './types';
+import type { KindleTemplate, MermaidConfig } from './types';
 
 /** Webview 用 CSP nonce のバイト数。 */
 const NONCE_BYTES = 16;
 
 /** 拡張全体で使用する OutputChannel。activate() で初期化される。 */
 let outputChannel!: vscode.OutputChannel;
+
+/** 拡張コンテキスト。activate() で初期化される。 */
+let extensionContext!: vscode.ExtensionContext;
 
 /**
  * Webview 用の nonce を生成する（CSP 用）。
@@ -157,6 +167,27 @@ async function exportDocument(target: 'epub' | 'pdf'): Promise<void> {
   // Phase 3: キャッシング対応
   const mermaidConfig = await loadConfigWithCache(workspaceFolder.uri.fsPath);
 
+  // Phase 3: EPUB エクスポート時はテンプレートを取得
+  let kindleTemplate: KindleTemplate | undefined;
+  if (target === 'epub') {
+    // extensionContext が初期化されているか確認
+    if (!extensionContext) {
+      outputChannel.appendLine('[Export] エラー: 拡張機能が正しく初期化されていません');
+      vscode.window.showErrorMessage('拡張機能の初期化が完了していません。しばらく待ってから再試行してください。');
+      return;
+    }
+    kindleTemplate = await getCurrentTemplate(extensionContext.extensionPath);
+    if (kindleTemplate) {
+      outputChannel.appendLine(
+        `[Export] Kindle テンプレート: ${kindleTemplate.metadata.displayName}`
+      );
+    } else {
+      outputChannel.appendLine(
+        '[Export] Kindle テンプレートが取得できませんでした。デフォルト設定でエクスポートします。'
+      );
+    }
+  }
+
   try {
     await vscode.window.withProgress(
       {
@@ -172,6 +203,7 @@ async function exportDocument(target: 'epub' | 'pdf'): Promise<void> {
             target,
             mermaidConfig,
             workingDirectory: workspaceFolder.uri.fsPath,
+            kindleTemplate,
           },
           outputChannel
         );
@@ -201,11 +233,199 @@ async function exportToPdf(): Promise<void> {
 }
 
 /**
+ * 「Kindle CSS 互換性チェック」コマンドを実行する（Phase 3 追加）
+ *
+ * .mermaid-config.json の themeCSS フィールドを検証し、
+ * Kindle 非互換の CSS プロパティを検出・報告する。
+ */
+async function checkKindleCompatibility(): Promise<void> {
+  const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+
+  if (!workspaceFolder) {
+    vscode.window.showWarningMessage(
+      'ワークスペースを開いてから「Kindle CSS 互換性チェック」を実行してください。'
+    );
+    return;
+  }
+
+  outputChannel.appendLine('[Kindle CSS] 互換性チェックを開始します...');
+  outputChannel.show();
+
+  // 設定を読み込む（キャッシュを使用）
+  const mermaidConfig = await loadConfigWithCache(workspaceFolder.uri.fsPath);
+
+  if (!mermaidConfig.themeCSS) {
+    outputChannel.appendLine('[Kindle CSS] themeCSS が設定されていません。チェックをスキップします。');
+    vscode.window.showInformationMessage(
+      'themeCSS が設定されていません。.mermaid-config.json に themeCSS を追加してください。'
+    );
+    return;
+  }
+
+  // CSS を検証
+  const result = validateCss(mermaidConfig.themeCSS);
+  const formattedResult = formatValidationResult(result);
+
+  outputChannel.appendLine(formattedResult);
+
+  // 結果に応じてメッセージを表示
+  if (result.issues.length === 0) {
+    vscode.window.showInformationMessage(
+      'Kindle CSS チェック: 問題は検出されませんでした。'
+    );
+  } else if (!result.isValid) {
+    vscode.window.showErrorMessage(
+      `Kindle CSS チェック: Critical な問題が ${result.criticalCount} 件検出されました。Output パネルを確認してください。`
+    );
+  } else if (result.warningCount > 0) {
+    vscode.window.showWarningMessage(
+      `Kindle CSS チェック: Warning が ${result.warningCount} 件検出されました。Output パネルを確認してください。`
+    );
+  } else {
+    vscode.window.showInformationMessage(
+      `Kindle CSS チェック: Info が ${result.infoCount} 件検出されました。Output パネルを確認してください。`
+    );
+  }
+}
+
+/** テンプレート選択用の QuickPick アイテム */
+interface TemplateQuickPickItem extends vscode.QuickPickItem {
+  templateId: string;
+}
+
+/**
+ * 現在の設定に基づいて Kindle テンプレートを取得する（Phase 3 追加）
+ *
+ * @param extensionPath 拡張機能のルートパス
+ * @returns テンプレート、見つからない場合は undefined
+ */
+async function getCurrentTemplate(
+  extensionPath: string
+): Promise<KindleTemplate | undefined> {
+  const config = vscode.workspace.getConfiguration('markdownMermaidViewer');
+  const templateSetting = config.get<string>('kindleTemplate', DEFAULT_TEMPLATE_ID);
+
+  if (templateSetting === 'custom') {
+    const customPath = config.get<string>('customTemplatePath', '');
+    if (!customPath) {
+      outputChannel.appendLine(
+        '[Template] カスタムテンプレートが選択されていますが、パスが設定されていません'
+      );
+      vscode.window.showWarningMessage(
+        'カスタムテンプレートが選択されていますが、パスが設定されていません。デフォルト設定でエクスポートします。'
+      );
+      return undefined;
+    }
+
+    try {
+      return await loadCustomTemplate(customPath, outputChannel);
+    } catch (err) {
+      const errorDetail = err instanceof Error ? err.message : String(err);
+      outputChannel.appendLine(`[Template] カスタムテンプレートの読み込みに失敗: ${errorDetail}`);
+      vscode.window.showWarningMessage(
+        `カスタムテンプレートの読み込みに失敗しました: ${errorDetail}。デフォルト設定でエクスポートします。`
+      );
+      return undefined;
+    }
+  }
+
+  return getTemplateById(extensionPath, templateSetting, outputChannel);
+}
+
+/**
+ * 「Kindle テンプレートを選択」コマンドを実行する（Phase 3 追加）
+ *
+ * QuickPick UI でテンプレートを選択し、設定を更新する。
+ */
+async function selectKindleTemplate(
+  context: vscode.ExtensionContext
+): Promise<void> {
+  outputChannel.appendLine('[Template] テンプレート選択を開始します...');
+
+  // バンドル済みテンプレートを読み込む
+  const templates = await loadBundledTemplates(context.extensionPath, outputChannel);
+
+  // QuickPick アイテムを作成
+  const items: TemplateQuickPickItem[] = templates.map((template) => ({
+    label: template.metadata.displayName,
+    description: template.metadata.id,
+    detail: template.metadata.description,
+    templateId: template.metadata.id,
+  }));
+
+  // カスタムテンプレートオプションを追加
+  items.push({
+    label: 'カスタム',
+    description: 'custom',
+    detail: 'ユーザー指定のテンプレートディレクトリを使用',
+    templateId: 'custom',
+  });
+
+  // QuickPick を表示
+  const selected = await vscode.window.showQuickPick(items, {
+    placeHolder: 'Kindle エクスポートに使用するテンプレートを選択してください',
+    title: 'Kindle テンプレートを選択',
+  });
+
+  if (!selected) {
+    return;
+  }
+
+  // カスタムテンプレートの場合はパスを入力
+  if (selected.templateId === 'custom') {
+    const customPath = await vscode.window.showInputBox({
+      prompt: 'カスタムテンプレートのディレクトリパスを入力してください',
+      placeHolder: '/path/to/custom/template',
+      validateInput: (value) => {
+        if (!value) {
+          return 'パスを入力してください';
+        }
+        return undefined;
+      },
+    });
+
+    if (!customPath) {
+      return;
+    }
+
+    // カスタムテンプレートの検証
+    try {
+      await loadCustomTemplate(customPath, outputChannel);
+      outputChannel.appendLine(`[Template] カスタムテンプレートを検証しました: ${customPath}`);
+    } catch (err) {
+      const errorDetail = err instanceof Error ? err.message : String(err);
+      vscode.window.showErrorMessage(
+        `カスタムテンプレートの読み込みに失敗しました: ${errorDetail}`
+      );
+      return;
+    }
+
+    // 設定を更新
+    const config = vscode.workspace.getConfiguration('markdownMermaidViewer');
+    await config.update('kindleTemplate', 'custom', vscode.ConfigurationTarget.Workspace);
+    await config.update('customTemplatePath', customPath, vscode.ConfigurationTarget.Workspace);
+
+    vscode.window.showInformationMessage(`カスタムテンプレートを設定しました: ${customPath}`);
+  } else {
+    // バンドル済みテンプレートの場合
+    const config = vscode.workspace.getConfiguration('markdownMermaidViewer');
+    await config.update('kindleTemplate', selected.templateId, vscode.ConfigurationTarget.Workspace);
+
+    vscode.window.showInformationMessage(
+      `テンプレートを「${selected.label}」に設定しました`
+    );
+  }
+
+  outputChannel.appendLine(`[Template] テンプレートを "${selected.templateId}" に設定しました`);
+}
+
+/**
  * 拡張がアクティベートされたときに呼ばれる。
  * OutputChannel 初期化、Viewer コマンド登録、エクスポートコマンド登録。
  * Phase 3: 設定キャッシュの初期化とワークスペース監視を追加。
  */
 export function activate(context: vscode.ExtensionContext): void {
+  extensionContext = context;
   outputChannel = vscode.window.createOutputChannel('Markdown Mermaid Viewer');
   outputChannel.appendLine('Markdown Mermaid Viewer が有効になりました。');
 
@@ -254,6 +474,22 @@ export function activate(context: vscode.ExtensionContext): void {
   );
   context.subscriptions.push(
     vscode.commands.registerCommand('markdownMermaidViewer.exportToPdf', exportToPdf)
+  );
+
+  // Phase 3: Kindle CSS 互換性チェックコマンド
+  context.subscriptions.push(
+    vscode.commands.registerCommand(
+      'markdownMermaidViewer.checkKindleCompatibility',
+      checkKindleCompatibility
+    )
+  );
+
+  // Phase 3: Kindle テンプレート選択コマンド
+  context.subscriptions.push(
+    vscode.commands.registerCommand(
+      'markdownMermaidViewer.selectKindleTemplate',
+      () => selectKindleTemplate(context)
+    )
   );
 }
 
